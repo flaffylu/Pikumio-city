@@ -223,6 +223,38 @@ body.touch .act{min-width:58px;padding:8px 6px;font-size:10px}
 .tog.on{background:var(--sun);color:#2a1530;border-color:var(--sun)}
 @media (max-width:520px){.setrow{grid-template-columns:1fr 54px}.setrow>label{grid-column:1/-1}}
 .perk.need{opacity:.6}
+
+/* ---- HUD size: everything scales with --hs, the touch controls with --cs ---- */
+:root{--hs:1;--cs:1}
+.hud{transform:scale(var(--hs));transform-origin:top left}
+#bl,#inv,#buffs{transform-origin:bottom left}
+body:not(.touch) #br,body:not(.touch) #drive{transform-origin:bottom right}
+body.touch #br,body.touch #drive{transform-origin:top right}
+#boss,#placeTag{transform:translateX(-50%) scale(var(--hs));transform-origin:top center}
+#prompt{transform:translateX(-50%) scale(var(--hs));transform-origin:center}
+#gain{transform:translateX(-50%) scale(var(--hs));transform-origin:center}
+#achToast{transform:translateX(-50%) translateY(-10px) scale(var(--hs));transform-origin:top center}
+#achToast.on{transform:translateX(-50%) translateY(0) scale(var(--hs))}
+#mini{transform:scale(var(--hs));transform-origin:top right}
+#team{top:calc(66px * var(--hs) + env(safe-area-inset-top,0px))}
+#boss{top:calc(84px * var(--hs) + env(safe-area-inset-top,0px))}
+#achToast{top:calc(96px * var(--hs) + env(safe-area-inset-top,0px))}
+body.touch #track{top:calc(62px * var(--hs) + env(safe-area-inset-top,0px))}
+body.touch #mission{top:calc(70px * var(--hs) + env(safe-area-inset-top,0px))}
+body.touch #tutHud{top:calc(140px * var(--hs) + env(safe-area-inset-top,0px))}
+body.touch #br,body.touch #drive{top:calc(14px + 148px * var(--hs) + env(safe-area-inset-top,0px))}
+body.touch #bl{bottom:calc(200px * var(--cs) + env(safe-area-inset-bottom,0px))}
+body.touch #inv{bottom:calc(268px * var(--cs) + env(safe-area-inset-bottom,0px))}
+body.touch #buffs{bottom:calc(300px * var(--cs) + env(safe-area-inset-bottom,0px))}
+#joy{transform:scale(var(--cs));transform-origin:bottom left;bottom:calc(70px * var(--cs) + env(safe-area-inset-bottom,0px))}
+.tbtn{transform:scale(var(--cs));transform-origin:bottom right}
+#jumpBtn{bottom:calc(150px * var(--cs) + env(safe-area-inset-bottom,0px))}
+#fireBtn{bottom:calc(66px * var(--cs) + env(safe-area-inset-bottom,0px))}
+#relBtn{bottom:calc(80px * var(--cs) + env(safe-area-inset-bottom,0px));right:calc(max(16px,env(safe-area-inset-right,0px)) + 90px * var(--cs))}
+#swapBtn{bottom:calc(150px * var(--cs) + env(safe-area-inset-bottom,0px));right:calc(max(16px,env(safe-area-inset-right,0px)) + 90px * var(--cs))}
+#camBtn{bottom:calc(220px * var(--cs) + env(safe-area-inset-bottom,0px));right:calc(max(16px,env(safe-area-inset-right,0px)) + 90px * var(--cs))}
+#actbar{transform:translateX(-50%) scale(var(--cs));transform-origin:bottom center}
+#ammo{line-height:1.12}
 @media (prefers-reduced-motion:reduce){.btn,.bar>div,#banner{transition:none}}
 </style>
 
@@ -438,6 +470,7 @@ body.touch .act{min-width:58px;padding:8px 6px;font-size:10px}
         <div class="setrow"><label>Fest / Jahreszeit</label><button class="tog on" id="tFest"></button><span></span></div>
         <div class="setrow"><label>Kamera</label><button class="tog on" id="tCam"></button><span></span></div>
         <div class="setrow"><label>Jahreszeit</label><button class="tog on" id="tSeason"></button><span></span></div>
+        <div class="setrow"><label>Anzeige-Größe</label><button class="tog on" id="tHud"></button><span></span></div>
         <div class="setrow"><label>Minikarte</label><button class="tog on" id="tMini"></button><span></span></div>
         <div class="setrow"><label>Minikarten-Zoom</label><button class="tog on" id="tMiniZ"></button><span></span></div>
         <div class="setrow"><label>Musik-Radio</label><button class="tog on" id="tMusic"></button><span></span></div>
@@ -32611,6 +32644,7 @@ function renderLoadSlots() {
 function renderSettings() {
   applyQuality();
   $('tTod').textContent = TOD_NAMES[SET.tod || 'auto'] + ' (Taste U)';
+  $('tHud').textContent = HUD_NAMES[SET.hudsize || 'auto'] + ' (' + Math.round(hudScale() * 100) + ' %)';
   $('tPhys').textContent = { realistisch: 'Realistisch (Drift, Gänge, Federung)', fahrhilfe: 'Realistisch mit Fahrhilfe (ABS, Traktion, ESP)', einfach: 'Einfach (wie früher)' }[physMode()];
   $('tDcam').textContent = (SET.dcam === 'cockpit' ? 'Cockpit' : 'Verfolgerkamera') + ' (im Auto Taste Z)';
   $('sSens').value = SET.sens; $('oSens').textContent = SET.sens.toFixed(2) + '×';
@@ -32633,6 +32667,7 @@ function renderSettings() {
 }
 $('tDiff').onclick = () => { const L = ['leicht', 'normal', 'schwer']; SET.diff = L[(L.indexOf(SET.diff || 'normal') + 1) % 3]; saveSettings(); renderSettings(); };
 $('tTod').onclick = () => cycleTod(false);
+$('tHud').onclick = () => { const L = ['auto', 'klein', 'winzig', 'gross']; SET.hudsize = L[(L.indexOf(SET.hudsize || 'auto') + 1) % L.length]; saveSettings(); hudScale(); renderSettings(); };
 $('tPhys').onclick = () => { const L = ['realistisch', 'fahrhilfe', 'einfach']; SET.phys = L[(L.indexOf(physMode()) + 1) % 3]; saveSettings(); renderSettings(); };
 $('tDcam').onclick = () => { SET.dcam = SET.dcam === 'cockpit' ? 'chase' : 'cockpit'; saveSettings(); renderSettings(); };
 $('tWx').onclick = () => { const L = ['auto', 'klar', 'wolken', 'regen', 'gewitter', 'nebel', 'schnee']; SET.wx = L[(L.indexOf(SET.wx || 'auto') + 1) % L.length]; saveSettings(); if (SET.wx !== 'auto') setWeather(SET.wx, true); renderSettings(); };
@@ -33706,7 +33741,7 @@ function lifeStart(save) {
   LIFE.dayNum = save && save.day ? save.day : 1; LIFE.prevDayT = dayT; LIFE.raidDay = 0; LIFE.labFight = false; LIFE.garageBroken = false; LIFE.em = null;
   driving = null; raid = null; $('raidHud').hidden = true; if (baseBlock) baseBlock.noCollide = false;
   for (const c of [...cars]) if (c.free && !c.garage) resetFreeCar(c);
-  applyUpgrades(); spawnPet(); spawnNPCs(); dailyData(); storyStart(); moreStart(); more2Start(); more3Start(); more4Start(); paStart(save); pbStart(save); pcStart(save); pdStart(); peStart(); pfStart(); pgStart(); phStart(); piStart(); pjStart(); pkStart(); plStart(); pmStart(); poStart();
+  applyUpgrades(); spawnPet(); spawnNPCs(); dailyData(); storyStart(); moreStart(); more2Start(); more3Start(); more4Start(); paStart(save); pbStart(save); pcStart(save); pdStart(); peStart(); pfStart(); pgStart(); phStart(); piStart(); pjStart(); pkStart(); plStart(); pmStart(); poStart(); ppStart();
   lifeDrawDrive(false); LIFE.trackT = 0;
 }
 function lifeClear() {
@@ -33714,11 +33749,11 @@ function lifeClear() {
   if (dialogOpen) closeDialog(false); toggleEmotes(false);
   if (raid) { for (const e of enemies) e.raid = false; raid = null; } if (baseBlock) baseBlock.noCollide = false; $('raidHud').hidden = true;
   removePet(); removeNPCs(); clearClues(); removeUpgrades(); if (lab.beacon) { scene.remove(lab.beacon); lab.beacon = null; }
-  LIFE.labFight = false; setLabDoor(false); lab.liquid.color.setRGB(.3, 1.6, .7); moreClear(); more2Clear(); more3Clear(); more4Clear(); paClear(); pbClear(); pcClear(); pdClear(); peClear(); pfClear(); pgClear(); phClear(); piClear(); pjClear(); pkClear(); plClear(); pmClear(); poClear();
+  LIFE.labFight = false; setLabDoor(false); lab.liquid.color.setRGB(.3, 1.6, .7); moreClear(); more2Clear(); more3Clear(); more4Clear(); paClear(); pbClear(); pcClear(); pdClear(); peClear(); pfClear(); pgClear(); phClear(); piClear(); pjClear(); pkClear(); plClear(); pmClear(); poClear(); ppClear();
   $('drive').hidden = true; $('track').hidden = true;
 }
 function lifeTick(dt) {
-  moreTick(dt); more2Tick(dt); more3Tick(dt); more4Tick(dt); paTick(dt); pbTick(dt); mapTick(dt); pcTick(dt); pdTick(dt); peTick(dt); pfTick(dt); pgTick(dt); phTick(dt); piTick(dt); pjTick(dt); pkTick(dt); plTick(dt); pmTick(dt); poTick(dt); lifeDay(); petTick(dt); gardenTick(dt); npcTick(dt); storyTick(dt); raidTick(dt); labTick(dt);
+  moreTick(dt); more2Tick(dt); more3Tick(dt); more4Tick(dt); paTick(dt); pbTick(dt); mapTick(dt); pcTick(dt); pdTick(dt); peTick(dt); pfTick(dt); pgTick(dt); phTick(dt); piTick(dt); pjTick(dt); pkTick(dt); plTick(dt); pmTick(dt); poTick(dt); ppTick(dt); lifeDay(); petTick(dt); gardenTick(dt); npcTick(dt); storyTick(dt); raidTick(dt); labTick(dt);
   if (!driving) { const y = player.pos.y > 3 && inBase ? Y2 + 2.6 : SIDEWALK_H + 3.4; baseLight.position.y = y; }
   if (UPG.floor2) for (const m of UPG.floor2.g.children) if (m.userData.win) m.material = nightF > .4 ? upMats.winLit : upMats.glass;
   if (LIFE.garageBroken && UPG.garage && (!garageCar || garageCar.dead) && dayT > .2 && dayT < .3) { garageCar = null; LIFE.garageBroken = false; garageCar = makeFreeCar('coupe', 12, 97.6, -45.7, Math.PI, false); garageCar.garage = true; applyTuning(); }
@@ -38550,6 +38585,28 @@ function joinRow(connected) {
 function poStart() { }
 function poClear() { }
 function poTick(dt) { }
+
+// ================= Package P: HUD size =================
+// On a short screen (a phone held sideways, a small window) the displays used to eat half
+// the picture. Everything on screen is now scaled by --hs (displays) and --cs (the touch
+// controls), computed from the window size and the player's own preference.
+const HUD_SIZES = { auto: 1, klein: .82, winzig: .68, gross: 1.15 };
+const HUD_NAMES = { auto: 'Automatisch', klein: 'Klein', winzig: 'Sehr klein', gross: 'Groß' };
+function hudScale() {
+  const mul = HUD_SIZES[SET.hudsize] || 1;
+  // the layout was drawn for roughly 980 x 640 CSS pixels; below that everything shrinks
+  const fit = Math.min(innerWidth / 980, innerHeight / 640, 1);
+  const hs = clamp(fit * mul, .42, 1.25), cs = clamp(hs * 1.08, .72, 1.2);
+  const r = document.documentElement.style;
+  r.setProperty('--hs', hs.toFixed(3)); r.setProperty('--cs', cs.toFixed(3));
+  return hs;
+}
+addEventListener('resize', () => setTimeout(hudScale, 60));
+addEventListener('orientationchange', () => setTimeout(hudScale, 250));
+hudScale();
+function ppStart() { hudScale(); }
+function ppClear() { }
+function ppTick(dt) { }
 
 pfBuildWorld();
 // ================= Sky package: sun rays, glitter path on the sea, big moon, turquoise shallows =================
