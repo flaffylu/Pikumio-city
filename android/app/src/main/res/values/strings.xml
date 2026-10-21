@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Pikumio City</string>
+    <string name="title_activity_main">Pikumio City</string>
+    <string name="package_name">de.pikumio.city</string>
+    <string name="custom_url_scheme">de.pikumio.city</string>
+</resources>

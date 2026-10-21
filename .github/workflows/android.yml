@@ -1,0 +1,71 @@
+name: APK bauen
+
+# Baut die Android-App. Laeuft bei jedem Push und laesst sich auf der
+# Actions-Seite auch von Hand starten ("Run workflow").
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Projekt holen
+        uses: actions/checkout@v4
+
+      - name: Java einrichten
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Node einrichten
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Pakete installieren
+        run: npm ci
+
+      - name: Spiel in die App kopieren
+        run: npx cap copy android
+
+      - name: Gradle ausfuehrbar machen
+        run: chmod +x android/gradlew
+
+      - name: APK bauen
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: APK umbenennen
+        run: |
+          mkdir -p out
+          cp android/app/build/outputs/apk/debug/app-debug.apk out/pikumio-city.apk
+          ls -lh out
+
+      - name: APK zum Download bereitstellen
+        uses: actions/upload-artifact@v4
+        with:
+          name: pikumio-city-apk
+          path: out/pikumio-city.apk
+          if-no-files-found: error
+          retention-days: 90
+
+      # Legt die APK zusaetzlich unter "Releases" ab. Von dort laesst sie sich am
+      # Handy mit einem Tipp herunterladen und installieren - ohne ZIP entpacken.
+      - name: APK als Release veroeffentlichen
+        # Scheitert nur, wenn Actions in den Repo-Einstellungen nichts schreiben
+        # darf. Der Build bleibt dann trotzdem gruen, die APK liegt oben als
+        # Artifact bereit.
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="build-${{ github.run_number }}"
+          gh release create "$TAG" out/pikumio-city.apk \
+            --title "Pikumio City (Build ${{ github.run_number }})" \
+            --notes "Zum Installieren die Datei pikumio-city.apk antippen." \
+            --latest

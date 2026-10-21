@@ -1,0 +1,11 @@
+{
+  "appId": "de.pikumio.city",
+  "appName": "Pikumio City",
+  "webDir": "www",
+  "android": {
+    "allowMixedContent": false,
+    "webContentsDebuggingEnabled": false,
+    "backgroundColor": "#0b0e18"
+  },
+  "server": { "androidScheme": "https" }
+}

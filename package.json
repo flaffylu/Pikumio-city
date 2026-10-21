@@ -1,0 +1,17 @@
+{
+  "name": "pikumio-city",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pikumio City - Android app",
+  "scripts": {
+    "sync": "cap sync android",
+    "apk": "cap copy android && cd android && ./gradlew assembleDebug"
+  },
+  "dependencies": {
+    "@capacitor/android": "7.0.1",
+    "@capacitor/core": "7.0.1"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "7.0.1"
+  }
+}
