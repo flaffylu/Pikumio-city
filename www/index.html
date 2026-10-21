@@ -38414,51 +38414,70 @@ function mqttClient(url, clientId, handlers) {
 // ---------- a room built on top of it ----------
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no I/O/0/1, they get misread
 const newCode = () => Array.from({ length: 4 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join('');
-const CR = { room: null, state: 'off', code: '', tried: 0, el: null, msg: '' };
+const CR = { room: null, state: 'off', code: '', el: null, msg: '', on: 0, tried: 0 };
 function codeRoom(code, done) {
+  // Connect to EVERY broker at once. Two phones only find each other if they picked the
+  // same one, and trying them one after the other lets them drift apart; this way any
+  // broker both of them can reach is enough.
   const peerId = 'p' + Math.random().toString(36).slice(2, 10), peers = new Map();
   const base = 'pikumio/v1/' + code, mine = base + '/p/' + peerId;
-  let cli = null, cbPeers = null, cbClose = null, idx = 0, killed = false, lastSent = '';
+  const conns = []; let cbPeers = null, cbClose = null, killed = false, lastSent = '', told = false;
+  const ready = () => conns.filter(c => c.cli && c.cli.ready && !c.cli.closed);
+  const status = () => {
+    CR.on = ready().length; CR.tried = conns.filter(c => c.done).length;
+    if (killed) return;
+    if (CR.on > 0) { CR.state = 'on'; CR.msg = ''; }
+    else if (CR.tried >= conns.length) { CR.state = CR.everOn ? 'lost' : 'failed'; CR.msg = CR.everOn ? 'Verbindung verloren.' : 'Keine Verbindung möglich. Prüft euer Internet und versucht es noch einmal.'; }
+    else CR.state = 'connecting';
+    if (CR.on > 0) CR.everOn = true;
+    codeUI();
+  };
   const room = {
     slow: true, code, peerId,
     peers: () => [...peers.values()],
-    presence: obj => { const s = JSON.stringify(obj); lastSent = s; if (cli && cli.ready) cli.publish(mine, s); return Promise.resolve(); },
+    presence: obj => {
+      const s = JSON.stringify(obj); lastSent = s;
+      // while looking for each other, shout on every line; once someone answered, use only
+      // the line they are on, so a round of co-op does not send four times the data
+      const live = ready(), used = peers.size ? live.filter(c => c.seen) : live;
+      for (const c of (used.length ? used : live)) c.cli.publish(mine, s);
+      return Promise.resolve();
+    },
     onPeers: (cb, closed) => { cbPeers = cb; cbClose = closed; },
-    close: () => { killed = true; clearInterval(tick); if (cli) { if (cli.ready) cli.publish(mine, '{"bye":1}'); cli.close(); } },
+    close: () => { killed = true; clearInterval(tick); for (const c of ready()) { c.cli.publish(mine, '{"bye":1}'); } for (const c of conns) if (c.cli) c.cli.close(); },
   };
   const tick = setInterval(() => {
     const now = performance.now(); let changed = false;
     for (const [id, p] of peers) if (now - p.t > 6000) { peers.delete(id); changed = true; }
-    if (changed && cbPeers) cbPeers();
+    if (changed) { if (cbPeers) cbPeers(); codeUI(); }
   }, 1000);
-  const tryNext = () => {
-    if (killed) return;
-    if (idx >= MQ_BROKERS.length) { CR.state = 'failed'; CR.msg = 'Keine Verbindung möglich. Prüft euer Internet und versucht es noch einmal.'; codeUI(); done(null); return; }
-    const url = MQ_BROKERS[idx++];
-    CR.state = 'connecting'; CR.msg = 'Verbinde … (Versuch ' + idx + ' von ' + MQ_BROKERS.length + ')'; codeUI();
-    let settled = false;
-    cli = mqttClient(url, 'piku-' + peerId, {
+  for (const url of MQ_BROKERS) {
+    const c = { url, cli: null, done: false, seen: false };
+    conns.push(c);
+    c.cli = mqttClient(url, 'piku-' + peerId + '-' + conns.length, {
       open: ok => {
-        if (!ok) { settled = true; tryNext(); return; }
-        settled = true; cli.subscribe(base + '/p/+');
-        CR.state = 'on'; CR.msg = ''; codeUI();
-        if (lastSent) cli.publish(mine, lastSent);
-        done(room);
+        c.done = true;
+        if (!ok) { try { c.cli.close(); } catch (e) { } status(); return; }
+        c.cli.subscribe(base + '/p/+');
+        if (lastSent) c.cli.publish(mine, lastSent);
+        if (!told) { told = true; done(room); }
+        status();
       },
       message: (topic, payload) => {
         const id = topic.slice(topic.lastIndexOf('/') + 1); if (id === peerId) return;
         let pr = null; try { pr = JSON.parse(payload); } catch (e) { return; }
-        if (!pr || pr.bye) { if (peers.delete(id) && cbPeers) cbPeers(); return; }
+        c.seen = true;
+        if (!pr || pr.bye) { if (peers.delete(id)) { if (cbPeers) cbPeers(); codeUI(); } return; }
         const had = peers.has(id);
         peers.set(id, { peer: id, sameTab: false, presence: pr, t: performance.now() });
-        if (!had && cbPeers) cbPeers();
+        if (!had) { if (cbPeers) cbPeers(); codeUI(); }
         else if (cbPeers && (pr.st === 'menu' || pr.st === 'host' || pr.st === 'solo')) cbPeers();
       },
-      close: () => { if (killed) return; if (!settled) { tryNext(); return; } CR.state = 'lost'; CR.msg = 'Verbindung verloren.'; peers.clear(); if (cbClose) cbClose(); codeUI(); },
+      close: () => { c.done = true; c.seen = false; if (killed) return; if (!ready().length) { peers.clear(); if (cbClose && told) cbClose(); } status(); },
     });
-    setTimeout(() => { if (!settled && !killed) { try { cli.close(); } catch (e) { } tryNext(); } }, 7000);
-  };
-  tryNext();
+    setTimeout(() => { if (!c.done && !killed) { c.done = true; try { c.cli.close(); } catch (e) { } status(); } }, 9000);
+  }
+  setTimeout(() => { if (!told && !killed) { told = true; done(null); } }, 9500);
   return room;
 }
 function startCodeRoom(code) {
@@ -38490,15 +38509,27 @@ function codeUI() {
   d.hidden = false; d.textContent = '';
   const note = document.createElement('p'); note.className = 'note'; note.style.margin = '0';
   if (CR.state === 'on') {
+    const found = CR.room ? CR.room.peers().length : 0;
     const big = document.createElement('div');
     big.style.cssText = 'font-family:var(--display);font-size:26px;letter-spacing:4px;color:#ffd27a';
     big.textContent = CR.code;
-    note.textContent = 'Sag deinem Mitspieler diesen Code. Er tippt ihn bei sich ein, dann seht ihr euch in der Liste.';
+    note.innerHTML = found
+      ? 'Verbunden! <b>' + found + '</b> Mitspieler gefunden – weiter unten in der Liste.'
+      : 'Warte auf deinen Mitspieler. Er muss bei sich <b>' + CR.code + '</b> in das Feld tippen und auf „Beitreten“ gehen – <b>nicht</b> auf „Spiel eröffnen“.';
+    const sub = document.createElement('p'); sub.className = 'note'; sub.style.cssText = 'margin:0;opacity:.6;font-size:11px';
+    sub.textContent = 'Verbunden über ' + CR.on + ' von ' + MQ_BROKERS.length + ' Vermittlern';
     const off = document.createElement('button'); off.className = 'btn ghost small'; off.textContent = 'Verbindung trennen'; off.onclick = stopCodeRoom;
-    d.append(big, note, off);
+    d.append(big, note);
+    if (!found) { const alt = document.createElement('p'); alt.className = 'note'; alt.style.cssText = 'margin:0;font-size:12px'; alt.textContent = 'Hat dein Mitspieler schon einen Code? Dann tippe ihn hier ein:'; d.append(alt, joinRow(true)); }
+    d.append(sub, off);
     return;
   }
-  if (CR.state === 'connecting') { note.textContent = CR.msg || 'Verbinde …'; d.append(note); return; }
+  if (CR.state === 'connecting') { note.textContent = 'Verbinde … (' + CR.tried + ' von ' + MQ_BROKERS.length + ' geprüft)'; d.append(note); return; }
+  d.append(joinRow(CR.state === 'on'));
+  note.textContent = CR.state === 'failed' || CR.state === 'lost' ? CR.msg : 'Zu zweit spielen: Einer tippt auf „Spiel eröffnen“ und sagt den Code weiter, der andere tippt ihn ein.';
+  d.append(note);
+}
+function joinRow(connected) {
   const row = document.createElement('div'); row.className = 'row'; row.style.cssText = 'gap:6px;flex-wrap:wrap';
   const inp = document.createElement('input');
   inp.type = 'text'; inp.id = 'codeInp'; inp.maxLength = 4; inp.placeholder = 'CODE'; inp.autocapitalize = 'characters'; inp.autocomplete = 'off';
@@ -38506,11 +38537,11 @@ function codeUI() {
   const join = document.createElement('button'); join.className = 'btn ghost small'; join.textContent = 'Beitreten';
   join.onclick = () => { const c = (inp.value || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); if (c.length !== 4) { CR.msg = 'Der Code hat 4 Zeichen.'; codeUI(); return; } startCodeRoom(c); };
   inp.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); join.click(); } };
+  if (connected) { row.append(inp, join); return row; }
   const make = document.createElement('button'); make.className = 'btn small'; make.textContent = 'Spiel eröffnen';
   make.onclick = () => startCodeRoom(newCode());
   row.append(make, inp, join);
-  note.textContent = CR.state === 'failed' || CR.state === 'lost' ? CR.msg : 'Zu zweit spielen: Einer tippt auf „Spiel eröffnen“ und sagt den Code weiter, der andere tippt ihn ein.';
-  d.append(row, note);
+  return row;
 }
 function poStart() { }
 function poClear() { }
