@@ -33702,7 +33702,7 @@ function lifeStart(save) {
   LIFE.dayNum = save && save.day ? save.day : 1; LIFE.prevDayT = dayT; LIFE.raidDay = 0; LIFE.labFight = false; LIFE.garageBroken = false; LIFE.em = null;
   driving = null; raid = null; $('raidHud').hidden = true; if (baseBlock) baseBlock.noCollide = false;
   for (const c of [...cars]) if (c.free && !c.garage) resetFreeCar(c);
-  applyUpgrades(); spawnPet(); spawnNPCs(); dailyData(); storyStart(); moreStart(); more2Start(); more3Start(); more4Start(); paStart(save); pbStart(save); pcStart(save); pdStart(); peStart(); pfStart(); pgStart(); phStart(); piStart(); pjStart(); pkStart(); plStart(); pmStart();
+  applyUpgrades(); spawnPet(); spawnNPCs(); dailyData(); storyStart(); moreStart(); more2Start(); more3Start(); more4Start(); paStart(save); pbStart(save); pcStart(save); pdStart(); peStart(); pfStart(); pgStart(); phStart(); piStart(); pjStart(); pkStart(); plStart(); pmStart(); poStart();
   lifeDrawDrive(false); LIFE.trackT = 0;
 }
 function lifeClear() {
@@ -33710,11 +33710,11 @@ function lifeClear() {
   if (dialogOpen) closeDialog(false); toggleEmotes(false);
   if (raid) { for (const e of enemies) e.raid = false; raid = null; } if (baseBlock) baseBlock.noCollide = false; $('raidHud').hidden = true;
   removePet(); removeNPCs(); clearClues(); removeUpgrades(); if (lab.beacon) { scene.remove(lab.beacon); lab.beacon = null; }
-  LIFE.labFight = false; setLabDoor(false); lab.liquid.color.setRGB(.3, 1.6, .7); moreClear(); more2Clear(); more3Clear(); more4Clear(); paClear(); pbClear(); pcClear(); pdClear(); peClear(); pfClear(); pgClear(); phClear(); piClear(); pjClear(); pkClear(); plClear(); pmClear();
+  LIFE.labFight = false; setLabDoor(false); lab.liquid.color.setRGB(.3, 1.6, .7); moreClear(); more2Clear(); more3Clear(); more4Clear(); paClear(); pbClear(); pcClear(); pdClear(); peClear(); pfClear(); pgClear(); phClear(); piClear(); pjClear(); pkClear(); plClear(); pmClear(); poClear();
   $('drive').hidden = true; $('track').hidden = true;
 }
 function lifeTick(dt) {
-  moreTick(dt); more2Tick(dt); more3Tick(dt); more4Tick(dt); paTick(dt); pbTick(dt); mapTick(dt); pcTick(dt); pdTick(dt); peTick(dt); pfTick(dt); pgTick(dt); phTick(dt); piTick(dt); pjTick(dt); pkTick(dt); plTick(dt); pmTick(dt); lifeDay(); petTick(dt); gardenTick(dt); npcTick(dt); storyTick(dt); raidTick(dt); labTick(dt);
+  moreTick(dt); more2Tick(dt); more3Tick(dt); more4Tick(dt); paTick(dt); pbTick(dt); mapTick(dt); pcTick(dt); pdTick(dt); peTick(dt); pfTick(dt); pgTick(dt); phTick(dt); piTick(dt); pjTick(dt); pkTick(dt); plTick(dt); pmTick(dt); poTick(dt); lifeDay(); petTick(dt); gardenTick(dt); npcTick(dt); storyTick(dt); raidTick(dt); labTick(dt);
   if (!driving) { const y = player.pos.y > 3 && inBase ? Y2 + 2.6 : SIDEWALK_H + 3.4; baseLight.position.y = y; }
   if (UPG.floor2) for (const m of UPG.floor2.g.children) if (m.userData.win) m.material = nightF > .4 ? upMats.winLit : upMats.glass;
   if (LIFE.garageBroken && UPG.garage && (!garageCar || garageCar.dead) && dayT > .2 && dayT < .3) { garageCar = null; LIFE.garageBroken = false; garageCar = makeFreeCar('coupe', 12, 97.6, -45.7, Math.PI, false); garageCar.garage = true; applyTuning(); }
@@ -38366,6 +38366,156 @@ function rpmHud(car) {
   $('rRpm').style.width = clamp(R.rpm / P.red * 100, 0, 100).toFixed(1) + '%'; $('rRpmT').textContent = (R.rpm / 1000).toFixed(1) + 'k U/min';
 }
 
+// ================= Package O: playing together with a room code =================
+// The artifact version gets its multiplayer connection from the Claude platform. In the
+// Android app that does not exist, so this builds the same thing from scratch: a tiny
+// MQTT client (3.1.1 over WebSocket, QoS 0) talks to a public broker, and codeRoom()
+// wraps it in exactly the API the co-op code already uses: peers(), presence(), onPeers().
+
+// ---------- minimal MQTT client ----------
+const MQ_BROKERS = ['wss://broker.emqx.io:8084/mqtt', 'wss://broker.hivemq.com:8884/mqtt', 'wss://test.mosquitto.org:8081', 'wss://mqtt.eclipseprojects.io/mqtt'];
+const mqEnc = new TextEncoder(), mqDec = new TextDecoder();
+function mqLen(n) { const o = []; do { let b = n % 128; n = Math.floor(n / 128); if (n > 0) b |= 128; o.push(b); } while (n > 0); return o; }
+function mqStr(s) { const b = mqEnc.encode(s); return [b.length >> 8, b.length & 255, ...b]; }
+function mqPacket(head, body) { return new Uint8Array([head, ...mqLen(body.length), ...body]); }
+function mqttClient(url, clientId, handlers) {
+  const ws = new WebSocket(url, 'mqtt'); ws.binaryType = 'arraybuffer';
+  const C = { ws, url, ready: false, ping: 0, closed: false };
+  let buf = new Uint8Array(0);
+  const send = u8 => { try { if (ws.readyState === 1) ws.send(u8); } catch (e) { } };
+  C.publish = (topic, payload) => send(mqPacket(0x30, [...mqStr(topic), ...mqEnc.encode(payload)]));
+  C.subscribe = topic => send(mqPacket(0x82, [0, 1, ...mqStr(topic), 0]));
+  C.close = () => { C.closed = true; clearInterval(C.ping); try { ws.close(); } catch (e) { } };
+  ws.onopen = () => {
+    send(mqPacket(0x10, [...mqStr('MQTT'), 4, 0x02, 0, 45, ...mqStr(clientId)]));
+    C.ping = setInterval(() => send(new Uint8Array([0xC0, 0])), 25000);
+  };
+  ws.onclose = () => { clearInterval(C.ping); if (!C.closed) { C.closed = true; handlers.close && handlers.close(); } };
+  ws.onerror = () => { };
+  ws.onmessage = ev => {
+    const inc = new Uint8Array(ev.data), merged = new Uint8Array(buf.length + inc.length);
+    merged.set(buf); merged.set(inc, buf.length); buf = merged;
+    for (;;) {
+      if (buf.length < 2) break;
+      let mul = 1, len = 0, i = 1, byte;
+      do { if (i >= buf.length) return; byte = buf[i++]; len += (byte & 127) * mul; mul *= 128; } while (byte & 128);
+      if (buf.length < i + len) break;
+      const type = buf[0] >> 4, body = buf.subarray(i, i + len); buf = buf.subarray(i + len);
+      if (type === 2) { C.ready = body[1] === 0; handlers.open && handlers.open(C.ready, body[1]); }
+      else if (type === 3) {
+        const tl = (body[0] << 8) | body[1], topic = mqDec.decode(body.subarray(2, 2 + tl));
+        handlers.message && handlers.message(topic, mqDec.decode(body.subarray(2 + tl)));
+      }
+    }
+  };
+  return C;
+}
+
+// ---------- a room built on top of it ----------
+const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no I/O/0/1, they get misread
+const newCode = () => Array.from({ length: 4 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join('');
+const CR = { room: null, state: 'off', code: '', tried: 0, el: null, msg: '' };
+function codeRoom(code, done) {
+  const peerId = 'p' + Math.random().toString(36).slice(2, 10), peers = new Map();
+  const base = 'pikumio/v1/' + code, mine = base + '/p/' + peerId;
+  let cli = null, cbPeers = null, cbClose = null, idx = 0, killed = false, lastSent = '';
+  const room = {
+    slow: true, code, peerId,
+    peers: () => [...peers.values()],
+    presence: obj => { const s = JSON.stringify(obj); lastSent = s; if (cli && cli.ready) cli.publish(mine, s); return Promise.resolve(); },
+    onPeers: (cb, closed) => { cbPeers = cb; cbClose = closed; },
+    close: () => { killed = true; clearInterval(tick); if (cli) { if (cli.ready) cli.publish(mine, '{"bye":1}'); cli.close(); } },
+  };
+  const tick = setInterval(() => {
+    const now = performance.now(); let changed = false;
+    for (const [id, p] of peers) if (now - p.t > 6000) { peers.delete(id); changed = true; }
+    if (changed && cbPeers) cbPeers();
+  }, 1000);
+  const tryNext = () => {
+    if (killed) return;
+    if (idx >= MQ_BROKERS.length) { CR.state = 'failed'; CR.msg = 'Keine Verbindung möglich. Prüft euer Internet und versucht es noch einmal.'; codeUI(); done(null); return; }
+    const url = MQ_BROKERS[idx++];
+    CR.state = 'connecting'; CR.msg = 'Verbinde … (Versuch ' + idx + ' von ' + MQ_BROKERS.length + ')'; codeUI();
+    let settled = false;
+    cli = mqttClient(url, 'piku-' + peerId, {
+      open: ok => {
+        if (!ok) { settled = true; tryNext(); return; }
+        settled = true; cli.subscribe(base + '/p/+');
+        CR.state = 'on'; CR.msg = ''; codeUI();
+        if (lastSent) cli.publish(mine, lastSent);
+        done(room);
+      },
+      message: (topic, payload) => {
+        const id = topic.slice(topic.lastIndexOf('/') + 1); if (id === peerId) return;
+        let pr = null; try { pr = JSON.parse(payload); } catch (e) { return; }
+        if (!pr || pr.bye) { if (peers.delete(id) && cbPeers) cbPeers(); return; }
+        const had = peers.has(id);
+        peers.set(id, { peer: id, sameTab: false, presence: pr, t: performance.now() });
+        if (!had && cbPeers) cbPeers();
+        else if (cbPeers && (pr.st === 'menu' || pr.st === 'host' || pr.st === 'solo')) cbPeers();
+      },
+      close: () => { if (killed) return; if (!settled) { tryNext(); return; } CR.state = 'lost'; CR.msg = 'Verbindung verloren.'; peers.clear(); if (cbClose) cbClose(); codeUI(); },
+    });
+    setTimeout(() => { if (!settled && !killed) { try { cli.close(); } catch (e) { } tryNext(); } }, 7000);
+  };
+  tryNext();
+  return room;
+}
+function startCodeRoom(code) {
+  if (CR.room) { CR.room.close(); CR.room = null; net.room = null; }
+  CR.code = code; CR.state = 'connecting'; codeUI();
+  CR.room = codeRoom(code, room => {
+    if (!room) { CR.room = null; return; }
+    net.room = room;
+    room.onPeers(() => { if (state === 'menu' || state === 'loading') renderLobby(); }, () => { net.room = null; renderLobby(); });
+    renderLobby();
+  });
+}
+function stopCodeRoom() {
+  if (CR.room) CR.room.close();
+  CR.room = null; net.room = null; CR.state = 'off'; CR.msg = '';
+  if (coop()) leaveCoop(); else renderLobby();
+}
+addEventListener('beforeunload', () => { if (CR.room) CR.room.close(); });
+
+// ---------- the lobby box with the code ----------
+function codeUI() {
+  const host = $('hostBtn'); if (!host || !host.parentElement) return;
+  if (!CR.el) {
+    const d = document.createElement('div'); d.id = 'codeBox'; d.style.cssText = 'margin:6px 0 2px;display:grid;gap:6px';
+    host.parentElement.insertBefore(d, host); CR.el = d;
+  }
+  const d = CR.el;
+  if (net.room && !CR.room) { d.hidden = true; return; } // the artifact brings its own connection
+  d.hidden = false; d.textContent = '';
+  const note = document.createElement('p'); note.className = 'note'; note.style.margin = '0';
+  if (CR.state === 'on') {
+    const big = document.createElement('div');
+    big.style.cssText = 'font-family:var(--display);font-size:26px;letter-spacing:4px;color:#ffd27a';
+    big.textContent = CR.code;
+    note.textContent = 'Sag deinem Mitspieler diesen Code. Er tippt ihn bei sich ein, dann seht ihr euch in der Liste.';
+    const off = document.createElement('button'); off.className = 'btn ghost small'; off.textContent = 'Verbindung trennen'; off.onclick = stopCodeRoom;
+    d.append(big, note, off);
+    return;
+  }
+  if (CR.state === 'connecting') { note.textContent = CR.msg || 'Verbinde …'; d.append(note); return; }
+  const row = document.createElement('div'); row.className = 'row'; row.style.cssText = 'gap:6px;flex-wrap:wrap';
+  const inp = document.createElement('input');
+  inp.type = 'text'; inp.id = 'codeInp'; inp.maxLength = 4; inp.placeholder = 'CODE'; inp.autocapitalize = 'characters'; inp.autocomplete = 'off';
+  inp.style.cssText = 'width:110px;text-transform:uppercase;letter-spacing:3px;font-weight:800;text-align:center;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,.25);background:rgba(0,0,0,.35);color:#fff;font-size:18px';
+  const join = document.createElement('button'); join.className = 'btn ghost small'; join.textContent = 'Beitreten';
+  join.onclick = () => { const c = (inp.value || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); if (c.length !== 4) { CR.msg = 'Der Code hat 4 Zeichen.'; codeUI(); return; } startCodeRoom(c); };
+  inp.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); join.click(); } };
+  const make = document.createElement('button'); make.className = 'btn small'; make.textContent = 'Spiel eröffnen';
+  make.onclick = () => startCodeRoom(newCode());
+  row.append(make, inp, join);
+  note.textContent = CR.state === 'failed' || CR.state === 'lost' ? CR.msg : 'Zu zweit spielen: Einer tippt auf „Spiel eröffnen“ und sagt den Code weiter, der andere tippt ihn ein.';
+  d.append(row, note);
+}
+function poStart() { }
+function poClear() { }
+function poTick(dt) { }
+
 pfBuildWorld();
 // ================= Sky package: sun rays, glitter path on the sea, big moon, turquoise shallows =================
 const SKYX = { t: 0 };
@@ -38709,7 +38859,7 @@ function clientMission(m) {
 // ---- presence send ----
 function netTick(dt) {
   if (!net.room) return;
-  net.sendT -= dt; if (net.sendT > 0) return; net.sendT = 1 / 20;
+  net.sendT -= dt; if (net.sendT > 0) return; net.sendT = 1 / (net.room && net.room.slow ? 12 : 20);
   const base = { n: myName(), st: coop() ? net.role : (state === 'play' ? 'solo' : 'menu'), gid: coop() ? net.gid : null };
   if (coop() && state !== 'menu') {
     Object.assign(base, { p: [r2(player.pos.x), r2(player.pos.y), r2(player.pos.z), r2(player.yaw)], hp: Math.ceil(player.hp), e: r2(curEye), sf: inBase && !baseBreached() ? 2 : inShelter ? 1 : 0, rb: +(baseData().raceBest || 0).toFixed(2), ch: LIFE.ch ? [LIFE.ch.id, LIFE.ch.seq] : 0, cm: CM, lk: lookCompact(), bq: net.role === 'client' ? myBuilds : 0, dv: driving ? [CAR_KIND_KEYS.indexOf(driving.kind), driving.ci || 0, r2(driving.h)] : 0, em: LIFE.em ? [LIFE.em.id, LIFE.em.seq] : 0, dead: net.down > 0 ? 1 : 0, w: W() ? W().idx : 0, hits: net.myHits, pk: net.myClaims });
@@ -38720,7 +38870,7 @@ function netTick(dt) {
 // ---- lobby ----
 function renderLobby() {
   const box = $('lobby'); if (!box) return;
-  if (!net.room) { $('lobbyNote').textContent = 'Mehrspieler ist hier nicht verfügbar. Er funktioniert nur für angemeldete Personen, die du zu diesem Spiel eingeladen hast.'; $('lobbyList').textContent = ''; $('hostBtn').hidden = true; return; }
+  if (!net.room) { $('lobbyNote').textContent = CR.state === 'on' ? 'Verbunden. Wartet aufeinander …' : 'Spielt zu zweit mit einem Code – ihr braucht dafür nur Internet.'; $('lobbyList').textContent = ''; $('hostBtn').hidden = true; codeUI(); return; }
   $('hostBtn').hidden = false;
   const others = net.room.peers().filter(p => !p.sameTab && p.presence && p.presence.n);
   const ul = $('lobbyList'); ul.textContent = '';
@@ -38733,6 +38883,7 @@ function renderLobby() {
     ul.append(li);
   }
   $('lobbyNote').textContent = 'Spielt zusammen gegen die Klone. Wer hostet, steuert die Klone; alle anderen treten bei.';
+  codeUI();
 }
 function hostCoop() { if (!net.room) return; net.role = 'host'; net.gid = 'g' + Math.random().toString(36).slice(2, 9); net.over = false; net.down = 0; activeSlot = 1; startGame(1, null); banner('Koop-Spiel gestartet', 'Freunde können jetzt im Menü beitreten', 2600); }
 function joinCoop(p) { net.role = 'client'; net.gid = p.presence.gid; net.hostPeer = p.peer; net.hostSeenAt = elapsed; net.over = false; net.down = 0; net.lastWave = 0; net.lastMk = -1; activeSlot = 1; startGame(1, null); toSpawn = []; waveDelay = 1e9; banner('Koop beigetreten', 'Gastgeber: ' + cleanName(p.presence.n, 1), 2400); }
