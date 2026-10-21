@@ -30,8 +30,10 @@ jobs:
       - name: Pakete installieren
         run: npm ci
 
+      # "sync" statt "copy": kopiert nicht nur das Spiel, sondern erzeugt auch die
+      # Hilfsmodule, die Capacitor selbst anlegt und die nicht im Repository liegen.
       - name: Spiel in die App kopieren
-        run: npx cap copy android
+        run: npx cap sync android
 
       - name: Gradle ausfuehrbar machen
         run: chmod +x android/gradlew
