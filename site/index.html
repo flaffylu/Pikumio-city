@@ -9,7 +9,9 @@
 <link rel="icon" href="img/icon.png">
 <meta property="og:title" content="Pikumio City">
 <meta property="og:description" content="Ein 3D-Spiel für Android: Stadt, Autos, Zug, Haustiere und Koop zu zweit.">
-<meta property="og:image" content="img/stadt.png">
+<meta property="og:image" content="https://flaffylu.github.io/Pikumio-city/img/cover.jpg">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Chakra+Petch:wght@500;700&display=swap">
@@ -30,7 +32,8 @@
   }
   .wrap{max-width:860px;margin:0 auto}
   header{text-align:center;padding:40px 0 8px}
-  .icon{width:104px;height:104px;border-radius:24px;display:block;margin:0 auto 18px;box-shadow:0 14px 34px rgba(0,0,0,.55)}
+  .cover{width:100%;max-width:720px;border-radius:16px;display:block;margin:0 auto 22px;box-shadow:0 18px 40px rgba(0,0,0,.5)}
+  .icon{width:84px;height:84px;border-radius:20px;display:block;margin:0 auto 14px;box-shadow:0 14px 34px rgba(0,0,0,.55)}
   h1{font-family:var(--display);font-weight:400;font-size:clamp(34px,9vw,62px);line-height:1;margin:0 0 10px;
      color:var(--sun);text-shadow:0 5px 0 #6a1d2c}
   .claim{color:var(--dim);font-size:clamp(15px,3.6vw,19px);margin:0 auto;max-width:34ch}
@@ -73,6 +76,7 @@
 <div class="wrap">
 
   <header>
+    <img class="cover" src="img/cover.jpg" alt="Pikumio City">
     <img class="icon" src="img/icon.png" alt="">
     <h1>Pikumio City</h1>
     <p class="claim">Eine ganze Stadt zum Erkunden: Autos, Züge, Haustiere, Abenteuer – und zu zweit spielen.</p>
