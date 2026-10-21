@@ -5,6 +5,8 @@ name: APK bauen
 on:
   push:
     branches: [main, master]
+    # Aenderungen nur an der Webseite brauchen keine neue APK
+    paths-ignore: ['site/**', 'README.md', '.github/workflows/pages.yml']
   workflow_dispatch:
 
 jobs:
