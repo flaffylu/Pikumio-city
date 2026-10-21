@@ -52,7 +52,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#1c1026;color:var(--in
 #banner span{display:block;font-size:clamp(14px,2.4vw,20px);letter-spacing:.08em;margin-top:6px}
 #boss{position:fixed;top:calc(84px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);width:min(420px,60vw);pointer-events:none;text-align:center}
 #boss .bar{border-color:var(--violet)}#bossfill{background:linear-gradient(90deg,var(--violet),#ff5bd1)}
-.screen{position:fixed;inset:0;display:grid;place-items:center;background:linear-gradient(180deg,rgba(28,16,38,.5),rgba(28,16,38,.88));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:16px;overflow:auto}
+.screen{position:fixed;inset:0;display:grid;place-items:center;place-items:safe center;background:linear-gradient(180deg,rgba(28,16,38,.5),rgba(28,16,38,.88));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:16px;overflow:auto}
 .card{max-width:560px;width:100%;display:grid;gap:18px;text-align:left}
 .card h1{font-family:var(--display);font-weight:400;font-size:clamp(40px,11vw,76px);line-height:.9;margin:0;color:var(--ink);text-shadow:0 5px 0 var(--blue),0 10px 0 #12325f;text-wrap:balance}
 .card h1 span{color:var(--sun)}
@@ -209,7 +209,7 @@ body.touch .act{min-width:58px;padding:8px 6px;font-size:10px}
 #baseTag,#shelterTag{bottom:calc(72px + env(safe-area-inset-bottom,0px))!important}
 #placeTag{bottom:calc(128px + env(safe-area-inset-bottom,0px))!important}
 .figbody{display:grid;gap:6px;max-width:440px}.figrow{display:grid;grid-template-columns:120px 40px 1fr 40px;gap:6px;align-items:center;font-size:14px}.figrow .val{text-align:center;background:rgba(0,0,0,.3);border-radius:5px;padding:7px 6px;font-weight:700}
-#pause.fig{background:linear-gradient(90deg,rgba(28,16,38,.9) 0,rgba(28,16,38,.75) 52%,rgba(28,16,38,0) 70%);place-items:center start}#pause.fig .card{max-width:min(470px,92vw)}
+#pause.fig{background:linear-gradient(90deg,rgba(28,16,38,.9) 0,rgba(28,16,38,.75) 52%,rgba(28,16,38,0) 70%);place-items:center start;place-items:safe center start}#pause.fig .card{max-width:min(470px,92vw)}
 .albtabs{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 10px}.albtabs .tog.on{background:rgba(255,179,71,.35);border-color:#ffb347}
 .albgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px;max-height:46vh;overflow:auto}.albgrid .note{grid-column:1/-1}
 .stk{background:rgba(0,0,0,.3);border:2px dashed rgba(255,246,234,.25);border-radius:8px;padding:8px 4px;text-align:center;font-size:12px;line-height:1.25}.stk .ico{width:46px;height:46px;margin:0 auto 6px;border-radius:50%;display:grid;place-items:center;font-size:26px;background:rgba(255,255,255,.08)}
@@ -32722,6 +32722,10 @@ function melee() {
   if (e.hp <= 0) { killEnemy(e, false, 'melee'); return; }
   if (!e.T.boss && !e.T.vehicle && !e.T.fly) { const kb = 7.5 / Math.max(1, sc); e.vx = dx / d * kb; e.vz = dz / d * kb; e.flinch = .5; e.flinchCd = 1; e.windup = 0; }
 }
+function inUiTouch(e) {
+  const t = e.target; if (!t || !t.closest) return false;
+  return !!t.closest('.screen:not([hidden]), .panel, #lobby, #codeBox, .setgrid, .tasks, .lobby');
+}
 function actBtn(id, fn) { const b = $(id); b.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); audio(); fn(); b.classList.add('hit'); setTimeout(() => b.classList.remove('hit'), 120); }); b.addEventListener('click', e => e.preventDefault()); b.addEventListener('touchstart', e => e.stopPropagation(), { passive: true }); }
 actBtn('aUse', useAction); actBtn('aPunch', melee); actBtn('aBuild', buildAction); actBtn('aNade', () => { if (state === 'play') throwGrenade(); }); actBtn('aPause', pauseGame); actBtn('aEmote', () => { if (state === 'play') toggleEmotes(); });
 function updateActBar(dt) {
@@ -38696,7 +38700,7 @@ if (isTouch) {
   function moveJoy(t) { const r = joy.getBoundingClientRect(); let dx = t.clientX - (r.left + r.width / 2), dy = t.clientY - (r.top + r.height / 2); const d = Math.hypot(dx, dy), m = 50; if (d > m) { dx *= m / d; dy *= m / d; } knob.style.transform = `translate(${dx}px,${dy}px)`; touchMove.x = dx / m; touchMove.y = dy / m; }
   joy.addEventListener('touchstart', e => { e.preventDefault(); joyId = e.changedTouches[0].identifier; moveJoy(e.changedTouches[0]); }, { passive: false });
   canvas.addEventListener('touchstart', e => { e.preventDefault(); if (state === 'photo' && false) return; for (const t of e.changedTouches) if (lookId === null && t.clientX > innerWidth * .35) { lookId = t.identifier; lx = t.clientX; ly = t.clientY; } }, { passive: false });
-  addEventListener('touchmove', e => { for (const t of e.changedTouches) { if (t.identifier === joyId) moveJoy(t); if (t.identifier === lookId && (state === 'play' || state === 'photo')) { look(t.clientX - lx, t.clientY - ly, .006 * SET.sens * camera.fov / SET.fov); lx = t.clientX; ly = t.clientY; } } if (state === 'play') e.preventDefault(); }, { passive: false });
+  addEventListener('touchmove', e => { for (const t of e.changedTouches) { if (t.identifier === joyId) moveJoy(t); if (t.identifier === lookId && (state === 'play' || state === 'photo')) { look(t.clientX - lx, t.clientY - ly, .006 * SET.sens * camera.fov / SET.fov); lx = t.clientX; ly = t.clientY; } } if (state === 'play' && !inUiTouch(e)) e.preventDefault(); }, { passive: false });
   const end = e => { for (const t of e.changedTouches) { if (t.identifier === joyId) { joyId = null; touchMove.x = touchMove.y = 0; knob.style.transform = ''; } if (t.identifier === lookId) lookId = null; } };
   addEventListener('touchend', end); addEventListener('touchcancel', end);
   const btn = (id, down, up) => { const b = $(id); b.addEventListener('touchstart', e => { e.preventDefault(); e.stopPropagation(); audio(); down(); }, { passive: false }); if (up) { b.addEventListener('touchend', e => { e.preventDefault(); up(); }); b.addEventListener('touchcancel', up); } };
