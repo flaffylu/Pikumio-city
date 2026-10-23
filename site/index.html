@@ -48,6 +48,8 @@
   .btn:active{transform:translateY(5px);box-shadow:0 3px 0 #8a4a12,0 8px 18px rgba(0,0,0,.45)}
   .sub{color:var(--dim);font-size:13px;text-align:center}
   .sub a{color:var(--sun)}
+  .count{margin:0;font-family:var(--display);font-weight:400;font-size:15px;color:var(--green);
+         background:rgba(63,212,122,.10);border:1px solid rgba(63,212,122,.4);border-radius:999px;padding:7px 16px}
   section{margin:40px 0 0}
   h2{font-family:var(--display);font-weight:400;font-size:clamp(20px,5vw,27px);color:var(--ink);margin:0 0 14px}
   .shots{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
@@ -90,6 +92,7 @@
       Für Android · etwa 39 MB · kostenlos · kein Konto nötig ·
       <a href="https://github.com/flaffylu/Pikumio-city/releases">alle Versionen ansehen</a>
     </p>
+    <p class="count" id="dlcount" hidden></p>
   </div>
 
   <section>
@@ -150,5 +153,20 @@
   </footer>
 
 </div>
+<script>
+  // Zaehlt alle Downloads aller Versionen zusammen (oeffentliche GitHub-Daten).
+  fetch('https://api.github.com/repos/flaffylu/Pikumio-city/releases?per_page=50')
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (rs) {
+      if (!rs || !rs.length) return;
+      var n = 0;
+      rs.forEach(function (rel) { (rel.assets || []).forEach(function (a) { n += a.download_count || 0; }); });
+      if (!n) return;
+      var el = document.getElementById('dlcount');
+      el.textContent = n === 1 ? 'Schon 1 mal heruntergeladen' : 'Schon ' + n + ' mal heruntergeladen';
+      el.hidden = false;
+    })
+    .catch(function () { });
+</script>
 </body>
 </html>
