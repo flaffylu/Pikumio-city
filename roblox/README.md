@@ -14,12 +14,20 @@ Dann oben auf **Play**.
 
 * Laufen und springen wie immer
 * **W / S / A / D** im Auto, **Leertaste** zum Aussteigen
-* Gegner besiegst du, indem du **von oben auf sie springst**
+* Waffe wählen: Zahlentasten, alle 25 mit der Taste **~**
+* Angreifen: **Linksklick**. Gegner gehen auch kaputt, wenn du **von oben draufspringst**
+
+## In der Welt
+
+* Stadt 1440 × 1440 Studs: Hochhäuser in der Mitte, Vorstadt außen
+* Umland mit Wald, See, Bauernhof, Berg und Strand
+* Hafen mit Kränen, Riesenrad, Markt, Cafés, Blumenbeete
+* Fußgänger, fließender Verkehr, Tag und Nacht
 
 ## Im Spiel
 
-* Münzen einsammeln, sie kommen nach 20 Sekunden wieder
-* Die Frechdachs-Bande jagt dich: Klaufix klaut Münzen, der Kaktus hüpft, Krümel ist zäh
-* Ab 50 Münzen kommt **Baron Blubberbauch** als Boss
-* Vor der Basis kaufst du Haustier, Krone, Turboschuhe und Extraleben
-* Vier Aufgaben nacheinander, Tag und Nacht wechseln von selbst
+* 156 Münzen, kommen nach 20 Sekunden wieder
+* Frechdachs-Bande: Klaufix klaut Münzen, Kaktus hüpft, Krümel ist zäh
+* Ab 50 Münzen kommt **Baron Blubberbauch**
+* Laden vor der Basis: Haustier, Krone, Turboschuhe, Extraleben
+* Vier Aufgaben nacheinander

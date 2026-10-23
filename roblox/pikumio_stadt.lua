@@ -484,6 +484,174 @@ do
 	startpunkt.Parent = m
 end
 
+
+-- ========== Schmuck: runde Formen, Markt, Riesenrad, Blumen ==========
+local F_SCHMUCK = ordner("Schmuck")
+
+-- runder Turm mit Kuppel
+local function rundturm(x, z, hoehe, farbe)
+	local m = Instance.new("Model")
+	m.Name = "Rundturm"
+	m.Parent = F_SCHMUCK
+	local d = 34
+	local t = Instance.new("Part")
+	t.Name = "Turm"
+	t.Shape = Enum.PartType.Cylinder
+	t.Anchored = true
+	t.Size = Vector3.new(hoehe, d, d)
+	t.Color = farbe
+	t.Material = Enum.Material.Concrete
+	t.CFrame = CFrame.new(x, hoehe / 2 + 1.6, z) * CFrame.Angles(0, 0, math.rad(90))
+	t.Parent = m
+	-- Fensterbänder rundherum
+	for r = 1, math.floor(hoehe / 22) do
+		local ring = Instance.new("Part")
+		ring.Name = "Band"
+		ring.Shape = Enum.PartType.Cylinder
+		ring.Anchored = true
+		ring.Size = Vector3.new(5, d + 0.6, d + 0.6)
+		ring.Color = C.glas
+		ring.Material = Enum.Material.Neon
+		ring.CFrame = CFrame.new(x, r * 22 + 4, z) * CFrame.Angles(0, 0, math.rad(90))
+		ring.Parent = m
+	end
+	kugel(m, "Kuppel", d + 2, Vector3.new(x, hoehe + 1.6, z), Color3.fromRGB(96, 170, 236), Enum.Material.Metal)
+	kugel(m, "Spitze", 5, Vector3.new(x, hoehe + d / 2 + 4, z), C.gelb, Enum.Material.Neon)
+	return m
+end
+
+for _, t in ipairs({
+	{ -BLOCK * 3 - 80, BLOCK * 2 + 80, 150, Color3.fromRGB(206, 196, 180) },
+	{ BLOCK * 2 + 80, -BLOCK * 3 - 80, 190, Color3.fromRGB(180, 170, 190) },
+	{ BLOCK * 3 + 80, BLOCK + 80, 130, Color3.fromRGB(196, 176, 150) },
+	{ -BLOCK - 80, -BLOCK * 3 - 80, 170, Color3.fromRGB(170, 186, 200) },
+}) do
+	rundturm(t[1], t[2], t[3], t[4])
+end
+
+-- Marktstand mit buntem Sonnenschirm
+local SCHIRM = {
+	Color3.fromRGB(226, 76, 68), Color3.fromRGB(70, 150, 220),
+	Color3.fromRGB(246, 190, 60), Color3.fromRGB(80, 190, 120),
+}
+local function marktstand(x, z, i)
+	local m = Instance.new("Model")
+	m.Name = "Marktstand"
+	m.Parent = F_SCHMUCK
+	block(m, "Tisch", Vector3.new(14, 1, 8), Vector3.new(x, 5, z), C.stamm, Enum.Material.WoodPlanks)
+	for _, s in ipairs({ -1, 1 }) do
+		zylinder(m, "Bein", 0.8, 5, Vector3.new(x + s * 6, 2.5, z), C.stamm, Enum.Material.Wood)
+	end
+	-- runder Schirm aus einer halben Kugel
+	local schirm = kugel(m, "Schirm", 20, Vector3.new(x, 11, z), SCHIRM[(i % #SCHIRM) + 1], Enum.Material.Fabric)
+	schirm.Size = Vector3.new(20, 7, 20)
+	schirm.Shape = Enum.PartType.Ball
+	zylinder(m, "Stange", 0.8, 8, Vector3.new(x, 8, z), C.metall, Enum.Material.Metal)
+	-- Obstkisten
+	for k = 1, 3 do
+		block(m, "Kiste", Vector3.new(3.4, 2, 3.4), Vector3.new(x - 5 + k * 3.4, 6.5, z),
+			SCHIRM[((i + k) % #SCHIRM) + 1], Enum.Material.WoodPlanks)
+	end
+	return m
+end
+
+for i = 1, 10 do
+	marktstand(-BLOCK * 2 + 40 + (i - 1) * 26, BLOCK / 2 + 70, i)
+end
+
+-- Café mit runden Tischen
+local function cafe(x, z, i)
+	local m = Instance.new("Model")
+	m.Name = "Cafe"
+	m.Parent = F_SCHMUCK
+	for k = 0, 2 do
+		local tx = x + k * 16
+		zylinder(m, "Tischfuss", 1.2, 4, Vector3.new(tx, 3.6, z), C.metall, Enum.Material.Metal)
+		local platte = zylinder(m, "Tisch", 7, 0.6, Vector3.new(tx, 5.8, z), Color3.fromRGB(240, 238, 230), Enum.Material.Marble)
+		platte.CFrame = CFrame.new(tx, 5.8, z) * CFrame.Angles(0, 0, math.rad(90))
+		local schirm = kugel(m, "Schirm", 14, Vector3.new(tx, 12, z), SCHIRM[((i + k) % #SCHIRM) + 1], Enum.Material.Fabric)
+		schirm.Size = Vector3.new(14, 5, 14)
+		zylinder(m, "Stange", 0.6, 8, Vector3.new(tx, 9, z), C.metall, Enum.Material.Metal)
+		for _, s in ipairs({ -1, 1 }) do
+			zylinder(m, "Hocker", 3.4, 0.6, Vector3.new(tx + s * 6, 4.4, z), Color3.fromRGB(190, 120, 90), Enum.Material.Fabric).CFrame =
+				CFrame.new(tx + s * 6, 4.4, z) * CFrame.Angles(0, 0, math.rad(90))
+		end
+	end
+	return m
+end
+
+cafe(-BLOCK / 2 - 20, -BLOCK / 2 + 70, 1)
+cafe(BLOCK + 40, BLOCK / 2 + 70, 2)
+
+-- Blumenbeete und Bäume an den Gehwegen
+local function beet(x, z, i)
+	local topf = zylinder(F_SCHMUCK, "Beet", 9, 3, Vector3.new(x, 2.6, z), Color3.fromRGB(180, 120, 90), Enum.Material.Slate)
+	for k = 1, 5 do
+		local a = (k / 5) * math.pi * 2
+		kugel(F_SCHMUCK, "Blume", 2, Vector3.new(x + math.cos(a) * 2.4, 4.6, z + math.sin(a) * 2.4),
+			SCHIRM[((i + k) % #SCHIRM) + 1], Enum.Material.Neon)
+	end
+end
+
+do
+	local i = 0
+	for gx = -GRID, GRID do
+		for gz = -GRID, GRID - 1 do
+			i = i + 1
+			if (gx + gz) % 2 == 0 then
+				local x = gx * BLOCK + ROAD / 2 + WALK - 4
+				local z = gz * BLOCK + BLOCK / 2
+				beet(x, z - 30, i)
+				baum(F_SCHMUCK, x, z + 30, 0.8, false)
+			end
+		end
+	end
+end
+
+-- Riesenrad am Hafen (dreht sich, sobald das Spielskript läuft)
+do
+	local rx, rz = -EDGE + 120, (GRID - 0.5) * BLOCK + 110
+	local m = Instance.new("Model")
+	m.Name = "Riesenrad"
+	m.Parent = F_SCHMUCK
+	local nabe = zylinder(m, "Nabe", 8, 6, Vector3.new(rx, 96, rz), C.metall, Enum.Material.Metal)
+	nabe.CFrame = CFrame.new(rx, 96, rz)
+	m.PrimaryPart = nabe
+	local R = 76
+	for i = 1, 16 do
+		local a = (i / 16) * math.pi * 2
+		local px, py = rx + math.cos(a) * R, 96 + math.sin(a) * R
+		-- Speiche
+		local sp = block(m, "Speiche", Vector3.new(2, R, 1.4), Vector3.new(rx + math.cos(a) * R / 2, 96 + math.sin(a) * R / 2, rz), C.gelb, Enum.Material.Metal)
+		sp.CFrame = CFrame.new(rx + math.cos(a) * R / 2, 96 + math.sin(a) * R / 2, rz) * CFrame.Angles(0, 0, a - math.pi / 2)
+		-- Gondel
+		block(m, "Gondel", Vector3.new(9, 8, 9), Vector3.new(px, py - 5, rz), SCHIRM[(i % #SCHIRM) + 1], Enum.Material.SmoothPlastic)
+	end
+	-- Stützen stehen separat, damit sie sich nicht mitdrehen
+	for _, s in ipairs({ -1, 1 }) do
+		block(F_SCHMUCK, "Stuetze", Vector3.new(5, 100, 5), Vector3.new(rx + s * 40, 50, rz), C.metall, Enum.Material.Metal)
+	end
+	block(F_SCHMUCK, "Sockel", Vector3.new(110, 3, 40), Vector3.new(rx, 2.5, rz), C.gehweg, Enum.Material.Concrete)
+end
+
+-- Kiosk, Hydranten, Mülleimer – kleine runde Dinge
+do
+	for i = 1, 14 do
+		local gx = math.random(-GRID, GRID)
+		local gz = math.random(-GRID, GRID - 1)
+		local x = gx * BLOCK + ROAD / 2 + WALK - 4
+		local z = gz * BLOCK + math.random(-60, 60)
+		zylinder(F_SCHMUCK, "Muelleimer", 4, 5, Vector3.new(x, 4, z), Color3.fromRGB(70, 90, 80), Enum.Material.Metal)
+		zylinder(F_SCHMUCK, "Hydrant", 2.6, 4.5, Vector3.new(x - 8, 3.8, z + 14), Color3.fromRGB(214, 62, 54), Enum.Material.Metal)
+	end
+	for i = 1, 4 do
+		local x = (i - 2.5) * BLOCK
+		local k = zylinder(F_SCHMUCK, "Kiosk", 16, 12, Vector3.new(x, 7.6, BLOCK / 2 - 40), Color3.fromRGB(246, 190, 60), Enum.Material.SmoothPlastic)
+		k.CFrame = CFrame.new(x, 7.6, BLOCK / 2 - 40)
+		kugel(F_SCHMUCK, "Kioskdach", 19, Vector3.new(x, 14, BLOCK / 2 - 40), Color3.fromRGB(226, 76, 68), Enum.Material.Fabric).Size = Vector3.new(19, 7, 19)
+	end
+end
+
 -- ========== Autos ==========
 -- Aufbau: Karosserie ohne Kollision, vier Räder mit Kollision, alles fest verschweißt.
 -- Gefahren wird über das zweite Skript (pikumio_auto.lua) in ServerScriptService.
@@ -507,13 +675,17 @@ local function auto(x, z, drehung, farbe)
 		return p
 	end
 
-	local karo = teil("Karosserie", Vector3.new(9, 3.4, 18), Vector3.new(0, 4.2, 0), farbe, Enum.Material.SmoothPlastic, false)
+	-- -Z ist vorne (dorthin schaut der Sitz und dorthin fährt das Auto)
+	local karo = teil("Karosserie", Vector3.new(9, 3, 19), Vector3.new(0, 4.0, 0), farbe, Enum.Material.SmoothPlastic, false)
 	m.PrimaryPart = karo
-	teil("Dach", Vector3.new(8.4, 3, 8), Vector3.new(0, 7.2, -1), farbe, Enum.Material.SmoothPlastic, false)
-	teil("Scheibe", Vector3.new(8.6, 2.4, 0.4), Vector3.new(0, 7.2, 3), Color3.fromRGB(150, 200, 230), Enum.Material.Glass, false)
+	teil("Haube", Vector3.new(8.4, 1.6, 6), Vector3.new(0, 5.6, -6), farbe, Enum.Material.SmoothPlastic, false)
+	teil("Heck", Vector3.new(8.4, 2.2, 5), Vector3.new(0, 6.0, 7), farbe, Enum.Material.SmoothPlastic, false)
+	teil("Scheibe", Vector3.new(8, 2.6, 0.4), Vector3.new(0, 6.6, -3), Color3.fromRGB(170, 215, 240), Enum.Material.Glass, false)
+	teil("Kuehler", Vector3.new(7, 1.2, 0.5), Vector3.new(0, 4.2, -9.6), Color3.fromRGB(40, 40, 46), Enum.Material.Metal, false)
 	for _, s in ipairs({ -1, 1 }) do
-		teil("Licht", Vector3.new(2, 1.2, 0.4), Vector3.new(s * 2.8, 4.4, 9.1), Color3.fromRGB(255, 240, 190), Enum.Material.Neon, false)
-		teil("Ruecklicht", Vector3.new(2, 1.2, 0.4), Vector3.new(s * 2.8, 4.4, -9.1), Color3.fromRGB(230, 60, 50), Enum.Material.Neon, false)
+		teil("Licht", Vector3.new(2, 1.2, 0.5), Vector3.new(s * 2.8, 5.2, -9.6), Color3.fromRGB(255, 240, 190), Enum.Material.Neon, false)
+		teil("Ruecklicht", Vector3.new(2, 1.2, 0.5), Vector3.new(s * 2.8, 5.2, 9.6), Color3.fromRGB(230, 60, 50), Enum.Material.Neon, false)
+		teil("Spiegel", Vector3.new(1.6, 0.8, 0.6), Vector3.new(s * 5.2, 6.2, -2.4), Color3.fromRGB(40, 40, 46), Enum.Material.SmoothPlastic, false)
 	end
 
 	local raeder = {}
@@ -545,8 +717,20 @@ local function auto(x, z, drehung, farbe)
 	sitz.MaxSpeed = 90
 	sitz.Torque = 20
 	sitz.TurnSpeed = 6
-	sitz.CFrame = CFrame.new(x, 0, z) * CFrame.Angles(0, math.rad(drehung), 0) * CFrame.new(0, 6.2, -1)
+	sitz.CFrame = CFrame.new(x, 0, z) * CFrame.Angles(0, math.rad(drehung), 0) * CFrame.new(0, 5.7, 1)
 	sitz.Parent = m
+
+	local lenkrad = Instance.new("Part")
+	lenkrad.Name = "Lenkrad"
+	lenkrad.Shape = Enum.PartType.Cylinder
+	lenkrad.Size = Vector3.new(0.4, 3, 3)
+	lenkrad.Color = Color3.fromRGB(32, 32, 38)
+	lenkrad.Material = Enum.Material.SmoothPlastic
+	lenkrad.CanCollide = false
+	lenkrad.Anchored = false
+	lenkrad.CFrame = CFrame.new(x, 0, z) * CFrame.Angles(0, math.rad(drehung), 0)
+		* CFrame.new(0, 6.0, -1.6) * CFrame.Angles(0, math.rad(90), math.rad(70))
+	lenkrad.Parent = m
 
 	-- alles fest mit der Karosserie verbinden
 	for _, p in ipairs(m:GetChildren()) do
@@ -601,6 +785,28 @@ local alteAtmo = Lighting:FindFirstChildOfClass("Atmosphere")
 if alteAtmo then
 	alteAtmo:Destroy()
 end
+for _, klasse in ipairs({ "BloomEffect", "SunRaysEffect", "ColorCorrectionEffect", "DepthOfFieldEffect" }) do
+	local alt2 = Lighting:FindFirstChildOfClass(klasse)
+	if alt2 then
+		alt2:Destroy()
+	end
+end
+local bloom = Instance.new("BloomEffect")
+bloom.Intensity = 0.7
+bloom.Size = 26
+bloom.Threshold = 1.1
+bloom.Parent = Lighting
+local strahlen = Instance.new("SunRaysEffect")
+strahlen.Intensity = 0.12
+strahlen.Spread = 0.9
+strahlen.Parent = Lighting
+local farbe = Instance.new("ColorCorrectionEffect")
+farbe.Brightness = 0.02
+farbe.Contrast = 0.12
+farbe.Saturation = 0.18
+farbe.TintColor = Color3.fromRGB(255, 250, 244)
+farbe.Parent = Lighting
+
 local atmo = Instance.new("Atmosphere")
 atmo.Density = 0.3
 atmo.Haze = 1.6
