@@ -492,34 +492,77 @@ local WAFFEN = {
 	{ name = "Feuerwerksrakete", art = "wurf", schaden = 5, pause = 1.0, weite = 0, farbe = Color3.fromRGB(255, 120, 60), form = "rakete" },
 }
 
+-- Baut eine Waffe aus mehreren kleinen Teilen.
+-- Der "Handle" liegt in der Hand, alles andere zeigt nach vorne (-Z) und wird angeschweißt.
+local function anbau(tool, griff, name, groesse, versatz, farbe, material, zylinderAchse)
+	local p = Instance.new("Part")
+	p.Name = name
+	p.Size = groesse
+	p.Color = farbe
+	p.Material = material or Enum.Material.SmoothPlastic
+	p.CanCollide = false
+	p.Massless = true
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
+	if zylinderAchse then
+		p.Shape = Enum.PartType.Cylinder
+	end
+	p.CFrame = griff.CFrame * versatz
+	p.Parent = tool
+	local w = Instance.new("WeldConstraint")
+	w.Part0 = griff
+	w.Part1 = p
+	w.Parent = p
+	return p
+end
+
+local function waffeFormen(tool, griff, def)
+	local f, c = def.form, def.farbe
+	local dunkel = Color3.fromRGB(44, 44, 52)
+	if f == "pistole" then
+		anbau(tool, griff, "Lauf", Vector3.new(0.45, 0.5, 2.2), CFrame.new(0, 0.5, -1.1), c)
+		anbau(tool, griff, "Visier", Vector3.new(0.2, 0.3, 0.6), CFrame.new(0, 0.9, -0.6), dunkel)
+		anbau(tool, griff, "Muendung", Vector3.new(0.35, 0.35, 0.35), CFrame.new(0, 0.5, -2.2), c, Enum.Material.Neon)
+	elseif f == "kanone" then
+		local rohr = anbau(tool, griff, "Rohr", Vector3.new(2.6, 1.1, 1.1), CFrame.new(0, 0.5, -1.4) * CFrame.Angles(0, math.rad(90), 0), c, nil, true)
+		anbau(tool, griff, "Ring", Vector3.new(0.5, 1.4, 1.4), CFrame.new(0, 0.5, -2.4) * CFrame.Angles(0, math.rad(90), 0), dunkel, nil, true)
+		anbau(tool, griff, "Muendung", Vector3.new(0.6, 0.6, 0.6), CFrame.new(0, 0.5, -2.7), c, Enum.Material.Neon)
+	elseif f == "stab" then
+		anbau(tool, griff, "Schaft", Vector3.new(2.8, 0.28, 0.28), CFrame.new(0, 0.4, -1.4) * CFrame.Angles(0, math.rad(90), 0), Color3.fromRGB(120, 90, 60), Enum.Material.Wood, true)
+		anbau(tool, griff, "Spitze", Vector3.new(0.7, 0.7, 0.7), CFrame.new(0, 0.4, -2.9), c, Enum.Material.Neon)
+	elseif f == "schwert" then
+		anbau(tool, griff, "Parier", Vector3.new(1.4, 0.25, 0.4), CFrame.new(0, 0.55, -0.2), Color3.fromRGB(190, 160, 70))
+		anbau(tool, griff, "Klinge", Vector3.new(0.18, 0.5, 3), CFrame.new(0, 0.55, -1.7), c, (def.name == "Lichtschwert") and Enum.Material.Neon or Enum.Material.Metal)
+	elseif f == "hammer" then
+		anbau(tool, griff, "Stiel", Vector3.new(2.2, 0.3, 0.3), CFrame.new(0, 0.4, -1.1) * CFrame.Angles(0, math.rad(90), 0), Color3.fromRGB(120, 90, 60), Enum.Material.Wood, true)
+		anbau(tool, griff, "Kopf", Vector3.new(1.3, 1.1, 1.1), CFrame.new(0, 0.4, -2.3), c, Enum.Material.Metal)
+	elseif f == "pfanne" then
+		anbau(tool, griff, "Stiel", Vector3.new(1.6, 0.25, 0.25), CFrame.new(0, 0.4, -0.8) * CFrame.Angles(0, math.rad(90), 0), dunkel, nil, true)
+		anbau(tool, griff, "Pfanne", Vector3.new(0.35, 2.4, 2.4), CFrame.new(0, 0.4, -2.1) * CFrame.Angles(0, math.rad(90), 0), c, Enum.Material.Metal, true)
+	elseif f == "keule" then
+		anbau(tool, griff, "Keule", Vector3.new(0.7, 0.7, 2.6), CFrame.new(0, 0.5, -1.4), c, (def.name == "Gummihuhn") and Enum.Material.SmoothPlastic or Enum.Material.Wood)
+		if def.name == "Gummihuhn" then
+			anbau(tool, griff, "Kamm", Vector3.new(0.3, 0.5, 0.5), CFrame.new(0, 1, -2.4), Color3.fromRGB(220, 60, 50))
+		end
+	elseif f == "rakete" then
+		anbau(tool, griff, "Rohr", Vector3.new(2.2, 0.9, 0.9), CFrame.new(0, 0.5, -1.2) * CFrame.Angles(0, math.rad(90), 0), dunkel, Enum.Material.Metal, true)
+		anbau(tool, griff, "Spitze", Vector3.new(0.7, 0.7, 0.7), CFrame.new(0, 0.5, -2.4), c, Enum.Material.Neon)
+	else
+		anbau(tool, griff, "Ball", Vector3.new(1.2, 1.2, 1.2), CFrame.new(0, 0.6, -0.7), c)
+	end
+end
+
 local function griffBauen(def)
 	local h = Instance.new("Part")
 	h.Name = "Handle"
 	h.Anchored = false
 	h.CanCollide = false
-	h.Color = def.farbe
-	h.Material = (def.art == "strahl") and Enum.Material.Neon or Enum.Material.SmoothPlastic
-	local f = def.form
-	if f == "pistole" then
-		h.Size = Vector3.new(0.8, 1.6, 3.4)
-	elseif f == "kanone" then
-		h.Size = Vector3.new(1.6, 1.6, 4.6)
-	elseif f == "stab" then
-		h.Size = Vector3.new(0.6, 0.6, 6)
-	elseif f == "schwert" then
-		h.Size = Vector3.new(0.5, 0.9, 7)
-	elseif f == "hammer" then
-		h.Size = Vector3.new(1.2, 1.2, 6)
-	elseif f == "pfanne" then
-		h.Size = Vector3.new(0.6, 3, 5)
-	elseif f == "keule" then
-		h.Size = Vector3.new(1, 1, 5.4)
-	elseif f == "rakete" then
-		h.Size = Vector3.new(1, 1, 4)
-	else
-		h.Size = Vector3.new(1.6, 1.6, 1.6)
-		h.Shape = Enum.PartType.Ball
-	end
+	h.Massless = true
+	h.Size = Vector3.new(0.5, 1.1, 0.5)      -- nur der Griff liegt in der Hand
+	h.Color = Color3.fromRGB(60, 50, 44)
+	h.Material = Enum.Material.SmoothPlastic
+	h.TopSurface = Enum.SurfaceType.Smooth
+	h.BottomSurface = Enum.SurfaceType.Smooth
 	return h
 end
 
@@ -599,6 +642,9 @@ local function waffeBauen(def, eltern)
 		or ((def.art == "strahl") and "Strahl · Schaden " .. def.schaden or "Wurf · Schaden " .. def.schaden)
 	local griff = griffBauen(def)
 	griff.Parent = tool
+	waffeFormen(tool, griff, def)
+	-- so liegt die Waffe richtig in der Hand und zeigt nach vorne
+	tool.Grip = CFrame.new(0, -0.1, 0.3)
 	return tool
 end
 

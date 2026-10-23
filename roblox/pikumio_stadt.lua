@@ -204,11 +204,11 @@ local function strasse(mitte, waagerecht)
 	for _, s in ipairs({ -1, 1 }) do
 		local gp, gs
 		if waagerecht then
-			gs = Vector3.new(laenge, 1.6, WALK)
-			gp = Vector3.new(0, 0.8, mitte + s * (ROAD / 2 + WALK / 2))
+			gs = Vector3.new(laenge, 1.2, WALK)
+			gp = Vector3.new(0, 0.6, mitte + s * (ROAD / 2 + WALK / 2))
 		else
-			gs = Vector3.new(WALK, 1.6, laenge)
-			gp = Vector3.new(mitte + s * (ROAD / 2 + WALK / 2), 0.8, 0)
+			gs = Vector3.new(WALK, 1.2, laenge)
+			gp = Vector3.new(mitte + s * (ROAD / 2 + WALK / 2), 0.6, 0)
 		end
 		block(F_STRASSEN, "Gehweg", gs, gp, C.gehweg, Enum.Material.Concrete)
 	end
@@ -677,6 +677,7 @@ local function auto(x, z, drehung, farbe)
 
 	-- -Z ist vorne (dorthin schaut der Sitz und dorthin fährt das Auto)
 	local karo = teil("Karosserie", Vector3.new(9, 3, 19), Vector3.new(0, 4.0, 0), farbe, Enum.Material.SmoothPlastic, false)
+	karo.CustomPhysicalProperties = PhysicalProperties.new(6, 0.3, 0, 1, 1)   -- tiefer Schwerpunkt
 	m.PrimaryPart = karo
 	teil("Haube", Vector3.new(8.4, 1.6, 6), Vector3.new(0, 5.6, -6), farbe, Enum.Material.SmoothPlastic, false)
 	teil("Heck", Vector3.new(8.4, 2.2, 5), Vector3.new(0, 6.0, 7), farbe, Enum.Material.SmoothPlastic, false)
@@ -699,7 +700,7 @@ local function auto(x, z, drehung, farbe)
 			rad.Material = Enum.Material.SmoothPlastic
 			rad.CanCollide = true
 			rad.Anchored = false
-			rad.CustomPhysicalProperties = PhysicalProperties.new(1.2, 0.35, 0.1, 1, 1)
+			rad.CustomPhysicalProperties = PhysicalProperties.new(2.5, 0.6, 0, 2, 1)   -- schwer, griffig, prallt nicht ab
 			rad.CFrame = CFrame.new(x, 0, z) * CFrame.Angles(0, math.rad(drehung), 0)
 				* CFrame.new(dx, 3.5, dz) * CFrame.Angles(0, 0, math.rad(90))
 			rad.Parent = m
@@ -792,9 +793,9 @@ for _, klasse in ipairs({ "BloomEffect", "SunRaysEffect", "ColorCorrectionEffect
 	end
 end
 local bloom = Instance.new("BloomEffect")
-bloom.Intensity = 0.7
+bloom.Intensity = 0.4
 bloom.Size = 26
-bloom.Threshold = 1.1
+bloom.Threshold = 1.4
 bloom.Parent = Lighting
 local strahlen = Instance.new("SunRaysEffect")
 strahlen.Intensity = 0.12

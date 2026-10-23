@@ -118,7 +118,13 @@ RunService.Heartbeat:Connect(function(dt)
 
 	local blick = sitz.CFrame.LookVector
 	local alt = wurzel.AssemblyLinearVelocity
-	wurzel.AssemblyLinearVelocity = Vector3.new(blick.X * tempo, alt.Y, blick.Z * tempo)
+	-- Bordsteine schleuderten das Auto hoch: beim Fahren darf es nicht nach oben schnellen.
+	-- Fallen (negative Werte) bleibt erlaubt, damit es Hügel und Abhänge noch kann.
+	local hoch = alt.Y
+	if math.abs(tempo) > 3 and hoch > 2 then
+		hoch = 2
+	end
+	wurzel.AssemblyLinearVelocity = Vector3.new(blick.X * tempo, hoch, blick.Z * tempo)
 
 	local wirkung = math.min(1, math.abs(tempo) / 16)
 	local richtung = (tempo < -0.5) and -1 or 1
