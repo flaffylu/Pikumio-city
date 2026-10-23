@@ -314,7 +314,7 @@ for gx = -GRID, GRID - 1 do
 		local ring = math.max(math.abs(gx), math.abs(gz + 1))
 		local istPark = (gx == 0 and gz == 0)
 		local istHafen = (gz == GRID - 1)
-		local istBasis = (gx == -1 and gz == -1)
+		local istBasis = (gx == -2 and gz == -2)   -- hier steht die Basis, kein Bauland
 		if not istPark and not istHafen and not istBasis then
 			baufeld(cx, cz, ring)
 		end
@@ -561,19 +561,31 @@ local function auto(x, z, drehung, farbe)
 end
 
 do
+	-- Auf der rechten Spur einer senkrechten Straße parken:
+	-- x = Straßenmitte + 11 (die Fahrbahn ist 44 breit), z = zwischen zwei Kreuzungen.
+	local function aufStrasse(strasseX, feldZ)
+		return { strasseX * BLOCK + 11, feldZ * BLOCK + BLOCK / 2, 0 }
+	end
 	local plaetze = {
-		{ -BLOCK / 2 - BLOCK, -BLOCK / 2 - BLOCK + 46, 0 },
-		{ BLOCK + 24, -BLOCK * 2 + 10, 0 },
-		{ -BLOCK * 2 + 24, BLOCK + 40, 0 },
-		{ BLOCK * 2 + 24, BLOCK * 2 - 30, 0 },
-		{ 24, -BLOCK * 3 + 20, 0 },
-		{ -BLOCK * 3 + 24, -20, 0 },
-		{ BLOCK * 3 + 24, -BLOCK + 30, 0 },
-		{ -24, BLOCK * 3 - 40, 180 },
+		aufStrasse(-2, -2),   -- direkt neben deiner Basis
+		aufStrasse(-1, -2),
+		aufStrasse(0, -1),
+		aufStrasse(1, 0),
+		aufStrasse(2, 1),
+		aufStrasse(-3, 1),
+		aufStrasse(3, -3),
+		aufStrasse(-1, 2),
+		aufStrasse(2, -2),
+		aufStrasse(0, 1),
 	}
+	local erstes
 	for i, p in ipairs(plaetze) do
 		auto(p[1], p[2], p[3], AUTOFARBEN[((i - 1) % #AUTOFARBEN) + 1])
+		if i == 1 then
+			erstes = p
+		end
 	end
+	print("Erstes Auto steht bei x=" .. math.floor(erstes[1]) .. " z=" .. math.floor(erstes[2]))
 end
 
 -- ========== Licht und Himmel ==========
@@ -598,3 +610,4 @@ atmo.Decay = Color3.fromRGB(120, 130, 160)
 atmo.Parent = Lighting
 
 print("Pikumio City steht! Teile: " .. #stadt:GetDescendants() .. "  ·  Stadt: " .. (EDGE * 2) .. " Studs breit")
+print("Autos findest du im Explorer unter PikumioCity → Autos. Einen anklicken und F drücken.")
