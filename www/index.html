@@ -448,7 +448,7 @@ body.touch #buffs{bottom:calc(300px * var(--cs) + env(safe-area-inset-bottom,0px
     </div>
     <div id="pSet" hidden>
       <div class="setgrid">
-        <div class="setrow"><label>Grafik</label><div class="row" style="gap:6px"><button class="tog" data-q="high">Hoch</button><button class="tog" data-q="low">Schnell</button><button class="tog" data-q="min">Sehr schnell</button></div><span></span></div>
+        <div class="setrow"><label>Grafik</label><div class="row" style="gap:6px"><button class="tog" data-q="ultra">Maximal</button><button class="tog" data-q="high">Hoch</button><button class="tog" data-q="low">Schnell</button><button class="tog" data-q="min">Sehr schnell</button></div><span></span></div>
         <div class="setrow"><label>Auflösung</label><button class="tog on" id="tRes"></button><span></span></div>
         <div class="setrow"><label>Upscaling (wie DLSS)</label><button class="tog on" id="tUps"></button><span></span></div>
         <div class="setrow"><label>Kantenglättung</label><button class="tog on" id="tAA"></button><span></span></div>
@@ -28901,13 +28901,19 @@ const UP = new THREE.Vector3(0, 1, 0);
 // ================= Renderer / scene =================
 const canvas = $('c');
 let QUALITY = 'high';
-if (location.hash === '#schnell') QUALITY = 'low'; else try { QUALITY = localStorage.getItem('pikumio-q') || (isTouch ? 'low' : 'high'); } catch (e) { QUALITY = isTouch ? 'low' : 'high'; }
+if (location.hash.includes('schnell')) QUALITY = 'low';
+else try {
+  QUALITY = localStorage.getItem('pikumio-q') || '';
+  if (!localStorage.getItem('pikumio-qmax')) { QUALITY = 'ultra'; localStorage.setItem('pikumio-qmax', '1'); localStorage.setItem('pikumio-q', 'ultra'); }
+} catch (e) { QUALITY = 'ultra'; }
+if (!QUALITY) QUALITY = isTouch ? 'low' : 'high';
+if (location.hash.includes('min')) QUALITY = 'min';
 const SET = { sens: 1, vol: .8, fov: 72, auto: true, shake: true, inv: false };
 try { Object.assign(SET, JSON.parse(localStorage.getItem('pikumio-set') || '{}')); } catch (e) { }
 function saveSettings() { try { localStorage.setItem('pikumio-set', JSON.stringify(SET)); } catch (e) { } }
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', stencil: false });
 const MAX_PR = Math.min(devicePixelRatio, isTouch ? 1.5 : 2), NATIVE_PR = Math.min(devicePixelRatio || 1, 3);
-let pixelRatio = QUALITY === 'high' ? Math.min(MAX_PR, 1.5) : Math.min(MAX_PR, 1);
+let pixelRatio = QUALITY === 'ultra' ? Math.min(NATIVE_PR, isTouch ? 2 : 3) : QUALITY === 'high' ? Math.min(MAX_PR, 1.5) : Math.min(MAX_PR, 1);
 renderer.setPixelRatio(pixelRatio);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -28915,11 +28921,11 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 0.85;
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(72, 1, 0.05, 900);
+const camera = new THREE.PerspectiveCamera(72, 1, 0.05, 1600);
 scene.add(camera);
 
 // post-processing: AO -> bloom -> grade -> tone map
-const composerRT = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: isTouch || QUALITY !== 'high' ? 0 : 4 });
+const composerRT = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: QUALITY === 'ultra' ? 4 : (isTouch || QUALITY !== 'high' ? 0 : 4) });
 const composer = new EffectComposer(renderer, composerRT);
 const renderPass = new RenderPass(scene, camera);
 composer.addPass(renderPass);
@@ -28974,15 +28980,17 @@ const UPS = { aus: [1, 0, 'Aus'], qualitaet: [.77, .3, 'Qualität (77 %)'], ausg
 const ANISO_MAX = (() => { try { return renderer.capabilities.getMaxAnisotropy(); } catch (e) { return 8; } })();
 function applyQuality() {
   const fx = SET.fx || 'auto', shq = SET.shq || 'auto', res = SET.res || 'auto';
-  gtao.enabled = fx === 'auto' ? QUALITY === 'high' : fx === 'hoch';
+  const ULTRA = QUALITY === 'ultra';
+  gtao.enabled = fx === 'auto' ? (QUALITY === 'high' || ULTRA) : fx === 'hoch';
   bloom.enabled = fx === 'auto' ? QUALITY !== 'min' : fx !== 'niedrig';
-  pixelRatio = res === 'nativ' ? NATIVE_PR : res === 'hoch' ? Math.min(NATIVE_PR, 1.5) : res === 'mittel' ? Math.min(NATIVE_PR, .75) : res === 'niedrig' ? .5 : QUALITY === 'high' ? Math.min(MAX_PR, 1.5) : QUALITY === 'min' ? Math.min(MAX_PR, .75) : Math.min(MAX_PR, 1);
-  const ups = UPS[SET.ups || 'aus'] || UPS.aus, upsOn = ups[0] < 1, aaOn = SET.aa === 'an' || (SET.aa !== 'aus' && upsOn);
+  pixelRatio = res === 'nativ' ? NATIVE_PR : res === 'hoch' ? Math.min(NATIVE_PR, 1.5) : res === 'mittel' ? Math.min(NATIVE_PR, .75) : res === 'niedrig' ? .5 : ULTRA ? Math.min(NATIVE_PR, isTouch ? 2 : 3) : QUALITY === 'high' ? Math.min(MAX_PR, 1.5) : QUALITY === 'min' ? Math.min(MAX_PR, .75) : Math.min(MAX_PR, 1);
+  const ups = UPS[SET.ups || 'aus'] || UPS.aus, upsOn = ups[0] < 1, aaOn = SET.aa === 'an' || (SET.aa !== 'aus' && (upsOn || ULTRA));
   if (upsOn && res === 'auto') pixelRatio = Math.min(NATIVE_PR, 2);
   renderScale = ups[0]; upPass.enabled = upsOn || aaOn; upPass.uniforms.sharp.value = upsOn ? ups[1] : .18; upPass.uniforms.aa.value = aaOn ? 1 : 0;
   const shOn = shq === 'auto' ? QUALITY !== 'min' : shq !== 'aus';
+  if (ULTRA && sun) { sun.shadow.bias = -0.0004; sun.shadow.normalBias = .02; }
   if (sun) sun.castShadow = shOn;
-  const s = shq === 'auto' ? (QUALITY === 'high' ? 4096 : 1024) : shq === 'hoch' ? 4096 : shq === 'mittel' ? 2048 : 1024;
+  const s = shq === 'auto' ? (QUALITY === 'high' || ULTRA ? 4096 : 1024) : shq === 'hoch' ? 4096 : shq === 'mittel' ? 2048 : 1024;
   applyTexQ();
   if (sun && sun.shadow.mapSize.x !== s) { sun.shadow.mapSize.set(s, s); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } }
   resize();
@@ -29052,7 +29060,7 @@ let clouds;
 const hemi = new THREE.HemisphereLight(0xdfe8ff, 0x3a3530, 0.35); scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xfff1dc, 3.2);
 sun.castShadow = true;
-const SHS = QUALITY === 'high' ? 4096 : 1024; sun.shadow.mapSize.set(SHS, SHS);
+const SHS = QUALITY === 'ultra' ? 4096 : QUALITY === 'high' ? 4096 : 1024; sun.shadow.mapSize.set(SHS, SHS);
 Object.assign(sun.shadow.camera, { left: -55, right: 55, top: 55, bottom: -55, near: 1, far: 260 });
 sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03;
 scene.add(sun); scene.add(sun.target);
@@ -29337,7 +29345,7 @@ const blinkMat = new THREE.MeshBasicMaterial({ color: 0xff2020, toneMapped: fals
 
 // ================= City layout =================
 const HALF = 70;
-const XMIN = -520, XMAX = 440, CITY_E = 106, ZMIN = -520, QUAY_Z = 92, ZMAX = QUAY_Z + 18;
+const XMIN = -680, XMAX = 440, CITY_E = 106, ZMIN = -860, QUAY_Z = 92, ZMAX = QUAY_Z + 18;
 const walkRects = [];
 const STREETS = [-64, -32, 0, 32, 64];
 const BLOCKS = [-48, -16, 16, 48];
@@ -29348,7 +29356,7 @@ const SIDEWALK_H = 0.15;
 const obstacles = []; // {box, h}
 function addCollider(minX, minZ, maxX, maxZ, h, y0 = 0) { const b = { box: new THREE.Box3(new THREE.Vector3(minX, y0, minZ), new THREE.Vector3(maxX, y0 + h, maxZ)), h: y0 + h }; obstacles.push(b); return b; }
 // static colliders of the big map live in a coarse grid so collision stays fast
-const farObs = [], FCELL = 8, FG0 = -536, FGN = 124, farGrid = new Array(FGN * FGN), NOFAR = []; let farStamp = 0;
+const farObs = [], FCELL = 8, FG0 = -880, FGN = 170, farGrid = new Array(FGN * FGN), NOFAR = []; let farStamp = 0;
 function addFarCollider(minX, minZ, maxX, maxZ, h, y0 = 0) {
   const b = { box: new THREE.Box3(new THREE.Vector3(minX, y0, minZ), new THREE.Vector3(maxX, y0 + h, maxZ)), h: y0 + h, far: true, st: 0 }; farObs.push(b);
   const m = 3, i0 = Math.max(0, Math.floor((minX - m - FG0) / FCELL)), i1 = Math.min(FGN - 1, Math.floor((maxX + m - FG0) / FCELL)), j0 = Math.max(0, Math.floor((minZ - m - FG0) / FCELL)), j1 = Math.min(FGN - 1, Math.floor((maxZ + m - FG0) / FCELL));
@@ -30131,7 +30139,7 @@ function carGeometry(kind) {
       for (const dx of [C[0][0] - .1, K.bX, C[3][0] + .25]) trim.push(new THREE.BoxGeometry(.014, belt - K.yb - .12, .01).translate(dx, (belt + K.yb + .12) / 2, s * (hw + .004)));
       for (const hx of [K.bX + .18, K.bX - .75 * (K.bX - C[3][0]) / 1.2]) chrome.push(new THREE.BoxGeometry(.18, .035, .03).translate(hx, belt - .14, s * (hw + .012)));
       // side skirt
-      trim.push(new THREE.BoxGeometry(K.wheelX[1] - K.wheelX[0] - ar * 2 - .1, .08, .04).translate((K.wheelX[0] + K.wheelX[1]) / 2, K.yb + .02, s * (hw - .02)));
+      { const wmin = Math.min(...K.wheelX), wmax = Math.max(...K.wheelX), sw = wmax - wmin - ar * 2 - .1; if (sw > .2) trim.push(new THREE.BoxGeometry(sw, .08, .04).translate((wmin + wmax) / 2, K.yb + .02, s * (hw - .02))); }
     }
   } else {
     for (const s of [-1, 1]) {
@@ -30197,6 +30205,22 @@ function carGeometry(kind) {
   }
   if (K.boards) {
     for (const s of [-1, 1]) trim.push(new THREE.BoxGeometry(K.wheelX[1] - K.wheelX[0] - ar * 2, .07, .3).translate((K.wheelX[0] + K.wheelX[1]) / 2, K.yb + .06, s * (hw + .06)));
+  }
+  if (K.boxBody) {
+    const b = K.boxBody, mid = (b.from + b.to) / 2, len = Math.abs(b.from - b.to);
+    for (const s of [-1, 1]) paint.push(new THREE.BoxGeometry(len, b.h, .09).translate(mid, b.y + b.h / 2, s * (hw - .045)));
+    paint.push(new THREE.BoxGeometry(len, .12, K.W - .09).translate(mid, b.y + b.h - .06, 0));
+    paint.push(new THREE.BoxGeometry(.1, b.h, K.W - .09).translate(b.from, b.y + b.h / 2, 0));
+    trim.push(new THREE.BoxGeometry(.09, b.h - .12, K.W - .14).translate(b.to, b.y + b.h / 2, 0));
+    trim.push(new THREE.BoxGeometry(len, .08, K.W - .2).translate(mid, b.y + .04, 0));
+    for (const s of [-1, 1]) for (let r = 0; r < 5; r++) chrome.push(new THREE.BoxGeometry(.06, b.h - .18, .06).translate(b.from - .4 - r * (len - .8) / 4, b.y + b.h / 2, s * (hw - .005)));
+    chrome.push(new THREE.BoxGeometry(.07, .07, K.W - .22).translate(b.to + .08, b.y + b.h * .55, 0));
+    for (const s of [-1, 1]) tails.push(new THREE.BoxGeometry(.05, .24, .3).translate(b.to - .02, b.y + .3, s * (hw - .45)));
+  }
+  if (K.stack) {
+    const st = K.stack;
+    for (const s of [-1, 1]) chrome.push((() => { const g = new THREE.CylinderGeometry(.08, .09, st.h, 10); g.translate(st.x, st.y + st.h / 2, s * (hw - .12)); return g; })());
+    for (const s of [-1, 1]) chrome.push((() => { const g = new THREE.CylinderGeometry(.11, .11, .16, 10); g.translate(st.x, st.y + st.h, s * (hw - .12)); return g; })());
   }
   // underbody shadow catcher
   trim.push(new THREE.BoxGeometry(K.L - .5, .05, K.W - .3).translate((front + rear) / 2, K.yb - .02, 0));
@@ -30588,6 +30612,7 @@ function xflatW(x, z) { let w = 0; for (const [x0, z0, x1, z1] of XFLAT) w = Mat
 function flatW(x, z) { return Math.max(xflatW(x, z), sstep(WTOWN.r + 16, WTOWN.r, Math.hypot(x - WTOWN.x, z - WTOWN.z)), sstep(VILLAGE.r + 16, VILLAGE.r, Math.hypot(x - VILLAGE.x, z - VILLAGE.z)), sstep(ALPV.r + 14, ALPV.r, Math.hypot(x - ALPV.x, z - ALPV.z)), Math.min(sstep(AIRF.x - 72, AIRF.x - 58, x), sstep(AIRF.x + 72, AIRF.x + 58, x), sstep(AIRF.z - 42, AIRF.z - 30, z), sstep(AIRF.z + 26, AIRF.z + 14, z))); }
 const FIELDS = [{ x0: -52, z0: -150, x1: -16, z1: -88, c: [0xd8b84a, 0xb8983a] }, { x0: 14, z0: -150, x1: 52, z1: -98, c: [0x5aa83a, 0x3a7a2a] }, { x0: 74, z0: -148, x1: 100, z1: -96, c: [0xf0d82a, 0x8ab83a] }];
 function fieldAt(x, z, m = 0) { for (const f of FIELDS) if (x > f.x0 - m && x < f.x1 + m && z > f.z0 - m && z < f.z1 + m) return f; return null; }
+const NLAKE = { x: 178, z: -690, rx: 88, rz: 54 };
 const LAKE = { x: -150, z: -110, rx: 30, rz: 21 }, CASTLE = { x: 0, z: -212 }, PEAK = { x: -205, z: -212 }, MILL = { x: -1, z: -120 }, CAMP = { x: -150, z: -80 };
 const lakeD = (x, z) => Math.hypot((x - LAKE.x) / LAKE.rx, (z - LAKE.z) / LAKE.rz);
 const inTerrain = (x, z) => x < CITY_W || z < CITY_N || (x <= -100 && z >= 69);
@@ -30609,13 +30634,14 @@ function terrainRaw(x, z) {
   { const wa = alpW(x, z); if (wa > 0) { const n3 = fbm2(x * .009 + 11, z * .009 + 4); h += (18 + n3 * 46 + 30 * sstep(70, 0, Math.hypot(x - ALPS.x, z - ALPS.z)) - h) * wa; } }
   { const fw = flatW(x, z); if (fw > 0) h += (SIDEWALK_H - h) * fw; }
   { const rv = riverDist(x, z); if (rv < 24) { const rh = -2.6 + (h + 2.6) * sstep(7, 22, rv); h += (Math.min(h, rh) - h) * sstep(24, 16, rv); } }
+  { const d2 = Math.hypot((x - NLAKE.x) / NLAKE.rx, (z - NLAKE.z) / NLAKE.rz); if (d2 < 1.7) { const lh = -3.4 + 4.2 * sstep(.2, 1.35, d2); h += (Math.min(h, lh) - h) * sstep(1.7, 1.25, d2); } }
   const ld = lakeD(x, z); if (ld < 1.7) { const lh = -2.7 + 3.3 * sstep(.15, 1.35, ld); h += (Math.min(h, lh) - h) * sstep(1.7, 1.25, ld); }
   const pd = pathDist(x, z); if (pd < 6 && h > 0) h -= .25 * sstep(6, 1.5, pd);
   const rd = roadDist(x, z); if (rd < 0) return -.4;
   h = .03 + (h - .03) * sstep(0, 14, rd);
   const dc = Math.hypot(Math.max(0, CITY_W - x), Math.max(0, CITY_N - z)); h = .03 + (h - .03) * sstep(0, 22, dc);
   if (x < CITY_W && z > 40) h = .03 + (h - .03) * sstep(69, 50, z);
-  const db = Math.max(LB - x, LB - z, z < CITY_N ? x - (XMAX - 16) : -1e9); if (db > 0) h += (1 - Math.exp(-db / 22)) * (38 + n * 75);
+  const db = Math.max(XMIN + 18 - x, ZMIN + 18 - z, z < CITY_N ? x - (XMAX - 16) : -1e9); if (db > 0) h += (1 - Math.exp(-db / 22)) * (38 + n * 75);
   return h;
 }
 // grid lines: regular steps plus every road edge and the city border, so cuts stay crisp
@@ -30717,7 +30743,7 @@ const TREE_TYPES = (() => {
 const forestMats = { trunk: new THREE.MeshStandardMaterial({ map: barkSet.map, color: 0xa08068, roughness: .95 }), pine: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: .85, flatShading: true }), leaf: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: .8, flatShading: true }) };
 const forestItems = { pine: [], leaf: [], bush: [] };
 function addTreeItem(kind, x, z, s) { const y = walkHeight(x, z) - .1; forestItems[kind].push({ x, y, z, s, r: Math.random() * 6.28 }); if (kind !== 'bush') addFarCollider(x - .35 * s, z - .35 * s, x + .35 * s, z + .35 * s, y + 6 * s); }
-function treeOK(x, z, margin = 4) { if (roadDist(x, z) < margin) return false; if ((Math.abs(x + 57) < 5 && z < -64 && z > -400) || (Math.abs(z + 395) < 5 && x < -48 && x > -425)) return false; if (fieldAt(x, z, 2)) return false; if (lakeD(x, z) < 1.12) return false; if (Math.hypot(x - CASTLE.x, z - CASTLE.z) < 30) return false; if (Math.hypot(x - MILL.x, z - MILL.z) < 12 || Math.hypot(x - CAMP.x, z - CAMP.z) < 14) return false; if (pathDist(x, z) < 3) return false; if (z > 60 && x < -100) return false; if (riverDist(x, z) < 12 || flatW(x, z) > .05 || deserW(x, z) > .3) return false; if (Math.abs(x + 380) < 7 && z < 40) return false; const h = terrainAt(x, z); if (h > 40) return false; for (const t of TURBINES) if (Math.hypot(x - t[0], z - t[1]) < 6) return false; return true; }
+function treeOK(x, z, margin = 4) { if (roadDist(x, z) < margin) return false; if (Math.hypot((x - NLAKE.x) / NLAKE.rx, (z - NLAKE.z) / NLAKE.rz) < 1.35) return false; if ((Math.abs(x + 57) < 5 && z < -64 && z > -400) || (Math.abs(z + 395) < 5 && x < -48 && x > -425)) return false; if (fieldAt(x, z, 2)) return false; if (lakeD(x, z) < 1.12) return false; if (Math.hypot(x - CASTLE.x, z - CASTLE.z) < 30) return false; if (Math.hypot(x - MILL.x, z - MILL.z) < 12 || Math.hypot(x - CAMP.x, z - CAMP.z) < 14) return false; if (pathDist(x, z) < 3) return false; if (z > 60 && x < -100) return false; if (riverDist(x, z) < 12 || flatW(x, z) > .05 || deserW(x, z) > .3) return false; if (Math.abs(x + 380) < 7 && z < 40) return false; const h = terrainAt(x, z); if (h > 40) return false; for (const t of TURBINES) if (Math.hypot(x - t[0], z - t[1]) < 6) return false; return true; }
 const TURBINES = [[92, -185], [94, -212], [90, -238], [-236, -150]];
 const TREE_KEEP = QUALITY === 'min' ? .5 : QUALITY === 'low' ? .75 : 1;
 for (let gx = LB + 2; gx < XMAX - 8; gx += 6.5) for (let gz = LB + 2; gz < 66; gz += 6.5) {
@@ -30987,7 +31013,7 @@ function mapTick(dt) {
   const x = player.pos.x, z = player.pos.z, r = REGIONS.find(q => q.t(x, z)).n;
   if (r !== regionName) { const first = !regionName; regionName = r; if (!first && state === 'play' && !driving && r !== 'Innenstadt') banner(r, '', 1500); }
 }
-function mapInteract() { let best = null, bd = 1; for (const s of MAPI) { if (Math.abs(player.pos.y - walkHeight(s.x, s.z)) > 2.5) continue; const d = Math.hypot(s.x - player.pos.x, s.z - player.pos.z) / s.r; if (d < bd) { bd = d; best = { name: s.name, act: s.act, _d: d }; } } return best; }
+function mapInteract() { let best = null, bd = 1; for (const s of MAPI) { if (Math.abs(player.pos.y - (s.y != null ? s.y : walkHeight(s.x, s.z))) > 2.5) continue; const d = Math.hypot(s.x - player.pos.x, s.z - player.pos.z) / s.r; if (d < bd) { bd = d; best = { name: s.name, act: s.act, _d: d }; } } return best; }
 
 // parked cars become static, merged, and act as cover
 for (let i = parkedSpots.length - 1; i >= 0; i--) if (DRIVE_SPOTS.some(d => Math.hypot(d[2] - parkedSpots[i].x, d[3] - parkedSpots[i].z) < 7)) parkedSpots.splice(i, 1);
@@ -31014,7 +31040,7 @@ for (const lane of LANES) {
     cars.push(car);
   }
 }
-const wheelCount = (cars.length + 16) * 4;
+const wheelCount = (cars.length + 48) * 6;
 const tireInst = new THREE.InstancedMesh(WHEEL_TIRE, tireMat, wheelCount), rimInst = new THREE.InstancedMesh(WHEEL_RIM, rimMat, wheelCount);
 for (const im of [tireInst, rimInst]) { im.castShadow = im === tireInst; im.receiveShadow = true; im.frustumCulled = false; im.userData.dyn = true; im.instanceMatrix.setUsage(THREE.DynamicDrawUsage); scene.add(im); }
 const intersections = [...LIGHT_X].map(k => { const [x, z] = k.split(',').map(Number); return { x, z }; });
@@ -32913,6 +32939,7 @@ function placeCar(car) {
   const tp = clamp(-(car.acc || 0) * .006, -.03, .035); car.pitch += (tp - car.pitch) * .15; if (car.R && car.R.on && realPhys(car)) realPose(car); else { if (car.R && car.R.on) realOff(car); car.body.rotation.z = -car.pitch; } if (car.ckpt && car !== driving && car.ckpt.visible) { car.ckpt.visible = false; if (car.body.children[1]) car.body.children[1].visible = true; }
   car.tail.color.setRGB(.5 + car.brake * 3.4 + nightF * .9, .03 + car.brake * .1, .02);
   car.g.updateMatrixWorld();
+  if (CAR_KINDS[car.kind] && CAR_KINDS[car.kind].trailer) { if (!car.trl) { if (typeof psBuildTrailer === 'function') psBuildTrailer(car); } else psTrailerPose(car); }
 }
 for (const [kind, ci, x, z, h] of DRIVE_SPOTS) makeFreeCar(kind, ci, x, z, h, true);
 function laneBand(car) { for (const l of LANES) if (Math.abs((l.axis === 'x' ? car.z : car.x) - l.fixed) < 2.8) return true; return false; }
@@ -33777,7 +33804,7 @@ function lifeStart(save) {
   LIFE.dayNum = save && save.day ? save.day : 1; LIFE.prevDayT = dayT; LIFE.raidDay = 0; LIFE.labFight = false; LIFE.garageBroken = false; LIFE.em = null;
   driving = null; raid = null; $('raidHud').hidden = true; if (baseBlock) baseBlock.noCollide = false;
   for (const c of [...cars]) if (c.free && !c.garage) resetFreeCar(c);
-  applyUpgrades(); spawnPet(); spawnNPCs(); dailyData(); storyStart(); moreStart(); more2Start(); more3Start(); more4Start(); paStart(save); pbStart(save); pcStart(save); pdStart(); peStart(); pfStart(); pgStart(); phStart(); piStart(); pjStart(); pkStart(); plStart(); pmStart(); poStart(); ppStart(); pqStart(); prStart();
+  applyUpgrades(); spawnPet(); spawnNPCs(); dailyData(); storyStart(); moreStart(); more2Start(); more3Start(); more4Start(); paStart(save); pbStart(save); pcStart(save); pdStart(); peStart(); pfStart(); pgStart(); phStart(); piStart(); pjStart(); pkStart(); plStart(); pmStart(); poStart(); ppStart(); pqStart(); prStart(); psStart(); ptStart();
   lifeDrawDrive(false); LIFE.trackT = 0;
 }
 function lifeClear() {
@@ -33785,11 +33812,11 @@ function lifeClear() {
   if (dialogOpen) closeDialog(false); toggleEmotes(false);
   if (raid) { for (const e of enemies) e.raid = false; raid = null; } if (baseBlock) baseBlock.noCollide = false; $('raidHud').hidden = true;
   removePet(); removeNPCs(); clearClues(); removeUpgrades(); if (lab.beacon) { scene.remove(lab.beacon); lab.beacon = null; }
-  LIFE.labFight = false; setLabDoor(false); lab.liquid.color.setRGB(.3, 1.6, .7); moreClear(); more2Clear(); more3Clear(); more4Clear(); paClear(); pbClear(); pcClear(); pdClear(); peClear(); pfClear(); pgClear(); phClear(); piClear(); pjClear(); pkClear(); plClear(); pmClear(); poClear(); ppClear(); pqClear(); prClear();
+  LIFE.labFight = false; setLabDoor(false); lab.liquid.color.setRGB(.3, 1.6, .7); moreClear(); more2Clear(); more3Clear(); more4Clear(); paClear(); pbClear(); pcClear(); pdClear(); peClear(); pfClear(); pgClear(); phClear(); piClear(); pjClear(); pkClear(); plClear(); pmClear(); poClear(); ppClear(); pqClear(); prClear(); psClear(); ptClear();
   $('drive').hidden = true; $('track').hidden = true;
 }
 function lifeTick(dt) {
-  moreTick(dt); more2Tick(dt); more3Tick(dt); more4Tick(dt); paTick(dt); pbTick(dt); mapTick(dt); pcTick(dt); pdTick(dt); peTick(dt); pfTick(dt); pgTick(dt); phTick(dt); piTick(dt); pjTick(dt); pkTick(dt); plTick(dt); pmTick(dt); poTick(dt); ppTick(dt); pqTick(dt); prTick(dt); lifeDay(); petTick(dt); gardenTick(dt); npcTick(dt); storyTick(dt); raidTick(dt); labTick(dt);
+  moreTick(dt); more2Tick(dt); more3Tick(dt); more4Tick(dt); paTick(dt); pbTick(dt); mapTick(dt); pcTick(dt); pdTick(dt); peTick(dt); pfTick(dt); pgTick(dt); phTick(dt); piTick(dt); pjTick(dt); pkTick(dt); plTick(dt); pmTick(dt); poTick(dt); ppTick(dt); pqTick(dt); prTick(dt); psTick(dt); lifeDay(); petTick(dt); gardenTick(dt); npcTick(dt); storyTick(dt); raidTick(dt); labTick(dt);
   if (!driving) { const y = player.pos.y > 3 && inBase ? Y2 + 2.6 : SIDEWALK_H + 3.4; baseLight.position.y = y; }
   if (UPG.floor2) for (const m of UPG.floor2.g.children) if (m.userData.win) m.material = nightF > .4 ? upMats.winLit : upMats.glass;
   if (LIFE.garageBroken && UPG.garage && (!garageCar || garageCar.dead) && dayT > .2 && dayT < .3) { garageCar = null; LIFE.garageBroken = false; garageCar = makeFreeCar('coupe', 12, 97.6, -45.7, Math.PI, false); garageCar.garage = true; applyTuning(); }
@@ -34906,7 +34933,7 @@ const DIFF = () => DIFFS[SET.diff] || DIFFS.normal;
 let cullT = 0;
 function perfTick(dt) {
   cullT -= dt; if (cullT > 0) return; cullT = .4;
-  const far = QUALITY === 'high' ? 110 : QUALITY === 'low' ? 70 : 50, sh = QUALITY === 'high';
+  const far = QUALITY === 'ultra' ? 190 : QUALITY === 'high' ? 110 : QUALITY === 'low' ? 70 : 50, sh = QUALITY === 'high' || QUALITY === 'ultra';
   const vis = (o, x, z) => { const pv = o.userData.pivot; if (!pv) return; const on = Math.hypot(x - camera.position.x, z - camera.position.z) < far; if (pv.visible !== on) pv.visible = on; if (o.userData.human && o.userData.shadowQ !== sh) { o.userData.shadowQ = sh; o.traverse(m => { if (m.isMesh) m.castShadow = sh; }); } };
   for (const p of peds) vis(p.obj, p.x, p.z);
   for (const n of npcs) vis(n.obj, n.x, n.z);
@@ -38808,8 +38835,9 @@ function prEdge(axis, c, a, b, skips) {
   let n = 0;
   for (const bx of PRX.bx) for (const bz of PRX.bz) {
     prSlab(bx, bz);
-    const kind = (bx === 208 && bz === 16) ? 'park' : (bx === 272 && bz === -48) ? 'park' : (n % 5 === 0) ? 'tower' : (n % 5 === 2) ? 'blocks' : 'mixed';
-    if (kind === 'park') {
+    const kind = (bx === 208 && bz === -16) ? 'leer' : (bx === 208 && bz === 16) ? 'park' : (bx === 272 && bz === -48) ? 'park' : (n % 5 === 0) ? 'tower' : (n % 5 === 2) ? 'blocks' : 'mixed';
+    if (kind === 'leer') { /* hier kommt spaeter der Pikumio-Tower hin */ }
+    else if (kind === 'park') {
       const gp = new THREE.PlaneGeometry(BW - 1.6, BW - 1.6); gp.rotateX(-Math.PI / 2); gp.translate(bx, PRX.Y + .013, bz);
       const uv = gp.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * (BW - 1.6) / 6, uv.getY(i) * (BW - 1.6) / 6);
       put(gardenMat, gp);
@@ -39009,6 +39037,346 @@ function prCottage(x, z, rot, wallCol, roofCol, w = 7, d = 6, h = 3.4) {
 function prStart() { }
 function prClear() { }
 function prTick(dt) { }
+
+// ================= Package S: lorries =================
+// Three heavy vehicles. The box lorry and the tipper are single bodies; the
+// articulated lorry pulls a real semi-trailer that swings behind it.
+Object.assign(CAR_KINDS, {
+  // box lorry with a closed cargo body
+  lkw: {
+    L: 7.8, W: 2.46, yb: .72, wheelX: [-2.2, 2.5], wr: .55, bX: 1.5,
+    body: [[3.88, .86], [3.94, 1.2], [3.92, 1.56], [3.4, 1.6], [.7, 1.62], [.56, 1.54], [-3.8, 1.54], [-3.9, .82]],
+    cabin: [[3.4, 1.6], [3.3, 2.92], [1.1, 2.94], [.7, 1.62]],
+    boxBody: { from: .5, to: -3.84, y: 1.54, h: 2.12 },
+    stack: { x: .28, y: 1.62, h: 1.9 },
+  },
+  // tipper with high side walls
+  kipper: {
+    L: 8.2, W: 2.5, yb: .74, wheelX: [-2.9, -1.75, 2.6], wr: .56, bX: 1.6,
+    body: [[4.08, .88], [4.14, 1.22], [4.12, 1.58], [3.6, 1.62], [.8, 1.64], [.66, 1.56], [-4.0, 1.56], [-4.1, .84]],
+    cabin: [[3.6, 1.62], [3.5, 2.94], [1.3, 2.96], [.8, 1.64]],
+    bed: { from: .6, to: -3.95, y: 1.56, h: 1.1 },
+    stack: { x: .4, y: 1.64, h: 1.9 },
+  },
+  // tractor unit for the semi-trailer
+  sattel: {
+    L: 6.8, W: 2.5, yb: .76, wheelX: [-2.5, -1.4, 2.3], wr: .56, bX: 1.2,
+    body: [[3.38, .9], [3.44, 1.24], [3.42, 1.6], [2.9, 1.64], [.2, 1.66], [.06, 1.58], [-3.3, 1.58], [-3.4, .86]],
+    cabin: [[2.9, 1.64], [2.8, 3.06], [-.5, 3.08], [-.9, 1.66]],
+    stack: { x: -1.0, y: 1.66, h: 2.2 },
+    trailer: { hitch: -2.0, len: 12.6, axle: 9.4, h: 2.95, deck: 1.3, wr: .5 },
+  },
+});
+
+// Only the dealership sells them; normal traffic keeps to cars.
+CAR_OFFERS.push(
+  ['lkw', 'Kastenwagen-LKW', 1200],
+  ['kipper', 'Kipper', 1600],
+  ['sattel', 'Sattelzug', 2200],
+);
+
+// Driving feel: heavy, slow, many gears, long braking distances.
+if (typeof VEH_PROFILES === 'object') {
+  Object.assign(VEH_PROFILES, {
+    lkw: { m: 7600, front: .44, hcg: 1.05, drive: 'R', curve: [[700, 620], [1300, 900], [1900, 980], [2400, 900], [2900, 740]], idle: 600, red: 2900, gears: [8.2, 4.9, 3.1, 2.1, 1.45, 1, .78], fd: 4.3, eff: .9, engBrake: 260, R: .55, Iw: 9, mu: .95, k: 120000, zeta: .36, arbF: 42000, arbR: 32000, travel: .16, brake: 9500, bias: .58, hand: 5200, Cd: .72, A: 7.4, Cl: 0, steer: .46, vs: 13, wb: 4.7 },
+    kipper: { m: 10500, front: .42, hcg: 1.15, drive: 'R', curve: [[700, 820], [1300, 1240], [1900, 1340], [2300, 1200], [2700, 980]], idle: 600, red: 2700, gears: [9.4, 5.4, 3.4, 2.2, 1.5, 1, .8], fd: 4.6, eff: .88, engBrake: 320, R: .56, Iw: 12, mu: .93, k: 150000, zeta: .34, arbF: 48000, arbR: 38000, travel: .18, brake: 12000, bias: .56, hand: 6200, Cd: .82, A: 8, Cl: 0, steer: .44, vs: 12, wb: 5.2 },
+    sattel: { m: 15500, front: .4, hcg: 1.2, drive: 'R', curve: [[700, 1100], [1250, 1750], [1800, 1900], [2200, 1720], [2600, 1380]], idle: 580, red: 2600, gears: [11.2, 6.4, 4.1, 2.7, 1.8, 1.25, .9, .72], fd: 4.1, eff: .88, engBrake: 380, R: .56, Iw: 14, mu: .92, k: 180000, zeta: .33, arbF: 52000, arbR: 44000, travel: .18, brake: 14000, bias: .54, hand: 7000, Cd: .95, A: 9.2, Cl: 0, steer: .4, vs: 11, wb: 4.8 },
+  });
+}
+
+// ---------- the semi-trailer ----------
+const PS = { list: [] };
+const psBodyMat = new THREE.MeshStandardMaterial({ color: 0xf0f0ee, roughness: .55, metalness: .1 });
+const psFrameMat = new THREE.MeshStandardMaterial({ color: 0x3a3e46, roughness: .5, metalness: .6 });
+function psBuildTrailer(car) {
+  const T = CAR_KINDS[car.kind].trailer; if (!T) return;
+  const g = new THREE.Group(); g.userData.dyn = true;
+  const W = car.W + .1, hw = W / 2, mk = (geo, mat, shadow = true) => { const m = new THREE.Mesh(geo, mat); m.castShadow = shadow; m.receiveShadow = true; g.add(m); return m; };
+  // chassis beam from the kingpin to the rear
+  mk(new THREE.BoxGeometry(T.len, .22, W - .5).translate(-T.len / 2, T.deck - .1, 0), psFrameMat);
+  // box: walls, roof, front and rear doors
+  const bh = T.h, by = T.deck;
+  for (const s of [-1, 1]) mk(new THREE.BoxGeometry(T.len, bh, .09).translate(-T.len / 2, by + bh / 2, s * (hw - .05)), psBodyMat);
+  mk(new THREE.BoxGeometry(T.len, .12, W - .08).translate(-T.len / 2, by + bh - .06, 0), psBodyMat);
+  mk(new THREE.BoxGeometry(.1, bh, W - .1).translate(-.05, by + bh / 2, 0), psBodyMat);
+  mk(new THREE.BoxGeometry(.1, bh - .12, W - .14).translate(-T.len + .05, by + bh / 2, 0), psFrameMat);
+  for (const s of [-1, 1]) for (let r = 0; r < 7; r++) mk(new THREE.BoxGeometry(.06, bh - .18, .06).translate(-.8 - r * (T.len - 1.6) / 6, by + bh / 2, s * (hw - .005)), psFrameMat, false);
+  // lettering on both sides
+  { const tex = canvasTex(1024, 192, (c, W2, H) => { c.fillStyle = '#f2f2f0'; c.fillRect(0, 0, W2, H); c.fillStyle = '#1d4ed8'; c.font = 'bold 118px Arial Black, Arial, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('PIKUMIO TRANSPORT', W2 / 2, H / 2 + 4); c.fillStyle = '#ffd24a'; c.fillRect(0, H - 22, W2, 22); });
+    for (const s of [-1, 1]) { const m = new THREE.Mesh(new THREE.PlaneGeometry(T.len - 1, bh * .62), new THREE.MeshStandardMaterial({ map: tex, roughness: .6 })); m.position.set(-T.len / 2, by + bh * .55, s * (hw + .001)); m.rotation.y = s > 0 ? 0 : Math.PI; g.add(m); } }
+  // landing legs
+  for (const s of [-1, 1]) mk(new THREE.BoxGeometry(.12, T.deck - .1, .12).translate(-2.6, (T.deck - .1) / 2, s * (hw - .5)), psFrameMat, false);
+  // rear bumper and lights
+  mk(new THREE.BoxGeometry(.14, .22, W - .3).translate(-T.len + .1, .55, 0), psFrameMat, false);
+  for (const s of [-1, 1]) { const l = new THREE.Mesh(new THREE.BoxGeometry(.06, .28, .5), new THREE.MeshBasicMaterial({ color: 0x7a1010, toneMapped: false })); l.position.set(-T.len + .02, by - .2, s * (hw - .5)); g.add(l); }
+  // two axles, four wheels, kept as real meshes so they can turn
+  const wheels = [];
+  for (const wx of [-T.axle, -T.axle - 1.35]) for (const s of [-1, 1]) {
+    const w = new THREE.Group(); w.position.set(wx, T.wr, s * (hw - .25));
+    const tire = new THREE.Mesh(WHEEL_TIRE, tireMat), rim = new THREE.Mesh(WHEEL_RIM, rimMat);
+    tire.castShadow = true; w.add(tire, rim); w.scale.setScalar(T.wr / .36); w.rotation.y = s < 0 ? Math.PI : 0;
+    g.add(w); wheels.push(w);
+  }
+  scene.add(g);
+  const t = { g, T, wheels, ax: car.x, az: car.z, th: car.h, spin: 0 };
+  // place the axle behind the lorry straight away
+  const hx = car.x + T.hitch * Math.cos(car.h), hz = car.z - T.hitch * Math.sin(car.h);
+  t.ax = hx - T.axle * Math.cos(car.h); t.az = hz + T.axle * Math.sin(car.h);
+  car.trl = t; PS.list.push({ car, t });
+}
+function psTrailerPose(car) {
+  const t = car.trl, T = t.T;
+  const hx = car.x + T.hitch * Math.cos(car.h), hz = car.z - T.hitch * Math.sin(car.h);
+  let dx = hx - t.ax, dz = hz - t.az, len = Math.hypot(dx, dz);
+  if (len < 1e-4) { dx = Math.cos(car.h); dz = -Math.sin(car.h); len = 1; }
+  t.th = Math.atan2(-dz, dx);
+  // the axle always stays the trailer's length behind the kingpin
+  t.ax = hx - T.axle * Math.cos(t.th); t.az = hz + T.axle * Math.sin(t.th);
+  t.g.position.set(hx, car.y, hz); t.g.rotation.y = t.th;
+  t.spin = car.spin * (.36 / T.wr);
+  for (const w of t.wheels) w.rotation.z = (w.rotation.y > 1 ? 1 : -1) * t.spin;
+}
+function psTick(dt) {
+  for (let i = PS.list.length - 1; i >= 0; i--) {
+    const e = PS.list[i];
+    if (!cars.includes(e.car)) { scene.remove(e.t.g); e.car.trl = null; PS.list.splice(i, 1); }
+  }
+}
+// A small haulage yard on the harbour quay, so the lorries can be found and
+// driven without buying one first.
+for (const [k, ci, x, z, h] of [['lkw', 5, 300, 86, Math.PI / 2], ['kipper', 1, 316, 86, Math.PI / 2], ['sattel', 3, 338, 86, Math.PI / 2], ['lkw', 9, 356, 86, Math.PI / 2]]) {
+  try { makeFreeCar(k, ci, x, z, h, false); } catch (e) { }
+}
+MAP_LABELS.push(['Spedition', 326, 86]);
+
+function psStart() { }
+function psClear() { for (const e of PS.list) scene.remove(e.t.g); PS.list.length = 0; }
+
+// ================= Package T: lifts, restaurants, the northern lake =================
+const PT = { lifts: [], ride: null };
+const ptGlass = new THREE.MeshPhysicalMaterial({ color: 0x8fd0e8, roughness: .07, metalness: .1, transmission: .55, transparent: true, opacity: .55, thickness: .3, side: THREE.DoubleSide });
+const ptSteel = new THREE.MeshStandardMaterial({ color: 0xb8bec8, roughness: .3, metalness: .85 });
+const ptFloor = new THREE.MeshStandardMaterial({ map: tileTex, color: 0xd8a460, roughness: .55 });
+
+// ---------- a tower with a panoramic lift on its west face ----------
+function ptTower(x, z, H, w, name, col) {
+  const Y = SIDEWALK_H, half = w / 2;
+  // plinth and shaft are built as single meshes so the glass keeps its own look
+  const mat = winMats[STYLE_IDX.glass[Math.floor(Math.random() * STYLE_IDX.glass.length)]];
+  const g = new THREE.BoxGeometry(w, H, w); setBoxUV(g, w, H, w); g.translate(x, Y + H / 2, z); put(mat, g);
+  const pl = new THREE.BoxGeometry(w + .6, 5, w + .6); setBoxUV(pl, w + .6, 5, w + .6, 8, 5); pl.translate(x, Y + 2.5, z); put(stoneMat, pl);
+  // entrance canopy on the west side
+  bx3(null, vcFlat, 0x2a2e36, 3.4, .3, 7, x - half - 1.5, Y + 4.2, z);
+  for (const s of [-1, 1]) cyl(null, vcMetal, 0xb8bec8, .1, .1, 4.2, x - half - 2.9, Y + 2.1, z + s * 3.1, 8);
+  // roof terrace: floor, parapet, lamps
+  bx3(null, vcFlat, 0xe4e0d6, w + 2.4, .5, w + 2.4, x, Y + H + .25, z);
+  for (const s of [-1, 1]) {
+    bx3(null, vcMetal, 0x3a4250, w + 2.4, 1.3, .18, x, Y + H + 1.15, z + s * (half + 1.1));
+    bx3(null, vcMetal, 0x3a4250, .18, 1.3, w + 2.4, x + s * (half + 1.1), Y + H + 1.15, z);
+    for (const t of [-1, 1]) cyl(null, vcMetal, 0xd8dce4, .07, .07, 1.3, x + s * (half + 1.1), Y + H + 1.15, z + t * (half * .5), 6);
+  }
+  // sign on the roof
+  { const tex = canvasTex(512, 96, (c, W2, Hh) => { c.fillStyle = '#' + col.toString(16).padStart(6, '0'); c.fillRect(0, 0, W2, Hh); c.fillStyle = '#fff6ea'; c.font = 'bold 56px Arial Black, Arial, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(name.toUpperCase(), W2 / 2, Hh / 2 + 3); });
+    for (const s of [-1, 1]) { const m = new THREE.Mesh(new THREE.PlaneGeometry(w + 1, 2), new THREE.MeshStandardMaterial({ map: tex, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: .45 })); m.position.set(x, Y + H + 3.2, z + s * (half + .1)); m.rotation.y = s > 0 ? 0 : Math.PI; m.userData.dyn = true; scene.add(m); }
+    bx3(null, vcMetal, 0x2a2e36, w + 1.2, 2.3, .3, x, Y + H + 3.2, z); }
+  // the lift shaft: two rails on the west face
+  const sx = x - half - .75;
+  for (const s of [-1, 1]) { const r = new THREE.Mesh(new THREE.BoxGeometry(.18, H, .18), ptSteel); r.position.set(sx, Y + H / 2, z + s * 1.5); r.castShadow = true; r.userData.dyn = true; scene.add(r); }
+  // the cabin
+  const cab = new THREE.Group(); cab.userData.dyn = true;
+  { const fl = new THREE.Mesh(new THREE.BoxGeometry(2.3, .16, 2.6), ptSteel); fl.position.y = -.08; cab.add(fl);
+    const rf = new THREE.Mesh(new THREE.BoxGeometry(2.4, .16, 2.7), ptSteel); rf.position.y = 2.4; cab.add(rf);
+    for (const [ww, dd, px, pz] of [[.1, 2.6, -1.1, 0], [2.3, .1, 0, -1.3], [2.3, .1, 0, 1.3]]) { const p = new THREE.Mesh(new THREE.BoxGeometry(ww, 2.4, dd), ptGlass); p.position.set(px, 1.2, pz); cab.add(p); }
+    for (const s of [-1, 1]) { const b = new THREE.Mesh(new THREE.BoxGeometry(.1, 2.4, .1), ptSteel); b.position.set(-1.1, 1.2, s * 1.3); cab.add(b); }
+    const lamp = new THREE.Mesh(new THREE.BoxGeometry(1.2, .08, 1.2), new THREE.MeshBasicMaterial({ color: 0xfff4d8, toneMapped: false })); lamp.position.y = 2.3; cab.add(lamp);
+  }
+  cab.position.set(sx - .7, Y, z); scene.add(cab);
+  const TOP = Y + H + .5;
+  addFarCollider(x - half, z - half, x + half, z + half, Y + H);                                    // the tower itself
+  addFarCollider(x - half - 1.2, z - half - 1.2, x + half + 1.2, z + half + 1.2, .8, Y + H - .3);   // the terrace floor sticks out
+  for (const s of [-1, 1]) {                                                                        // parapet: you cannot fall off
+    addFarCollider(x - half - 1.3, z + s * (half + 1.1) - .15, x + half + 1.3, z + s * (half + 1.1) + .15, 1.4, TOP);
+    addFarCollider(x + s * (half + 1.1) - .15, z - half - 1.3, x + s * (half + 1.1) + .15, z + half + 1.3, 1.4, TOP);
+  }
+  const L = { x, z, w, H, Y, cx: sx - .7, cz: z, cab, name, top: TOP };
+  PT.lifts.push(L);
+  MAPI.push({ name: 'Fahrstuhl hoch: ' + name, x: L.cx, z: L.cz, r: 3, y: Y, act: () => ptRide(L, 1) });
+  MAPI.push({ name: 'Fahrstuhl runter', x: L.cx, z: L.cz, r: 3.4, y: L.top, act: () => ptRide(L, -1) });
+  MAP_LABELS.push([name, x, z]);
+  minimapRects.push({ x, z, w: w + 2, d: w + 2, type: 'bld' });
+  return L;
+}
+function ptRide(L, dir) {
+  if (PT.ride) return;
+  if (driving) return;
+  PT.ride = { L, t: dir > 0 ? 0 : 1, dir };
+  flyText(dir > 0 ? 'Hoch geht es ...' : 'Und wieder runter ...');
+  tone({ f: 560, f2: dir > 0 ? 900 : 360, d: .5, type: 'sine', v: .05 });
+}
+function ptTick(dt) {
+  const R = PT.ride; if (!R) return false;
+  const L = R.L, travel = L.top - (L.Y + .2);
+  R.t = clamp(R.t + R.dir * dt * (6.5 / Math.max(10, travel)), 0, 1);
+  const y = L.Y + .2 + travel * R.t;
+  L.cab.position.y = y - .2;
+  player.pos.set(L.cx, y, L.cz); player.vy = 0; player.onGround = true;
+  if (R.t >= 1 && R.dir > 0) {
+    PT.ride = null;
+    player.pos.set(L.x - L.w / 2 + .8, L.top, L.z);
+    flyText(Math.round(L.H) + ' Meter hoch! Schau dich um.');
+    sticker('o', L.name);
+  } else if (R.t <= 0 && R.dir < 0) {
+    PT.ride = null;
+    player.pos.set(L.cx - 1.6, walkHeight(L.cx - 1.6, L.cz), L.cz);
+  }
+  return true;
+}
+
+// ---------- the towers ----------
+ptTower(208, -16, 118, 18, 'Pikumio-Tower', 0x1d4ed8);   // mitten in Neu-Pikumio
+ptTower(320, -54, 96, 18, 'Oststern', 0xd83a3a);
+ptTower(400, 40, 72, 16, 'Ostturm', 0x2a9a5a);
+flushGB();
+
+// ---------- a proper restaurant you can walk into ----------
+const PU = { seats: [] };
+function ptRestaurant(cx, cz, rot, name, col, dishes) {
+  const W = 17, D = 12, H = 4.8, Y = walkHeight(cx, cz), M = mkM(cx, Y, cz, rot);
+  const wallC = 0xf4ece0, T = .3, SILL = .95, WTOP = 3.1;   // window band between sill and top
+  // floor and ceiling
+  { const f = new THREE.PlaneGeometry(W - .6, D - .6); f.rotateX(-Math.PI / 2); const uv = f.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * 5, uv.getY(i) * 4); f.translate(0, .09, 0); put(ptFloor, f, null, M); }
+  bx3(M, vcFlat, 0xf0ead8, W, .3, D, 0, H + .15, 0);
+  // walls: back, sides, and a front with a doorway gap
+  bx3(M, vcWall, wallC, W, H, T, 0, H / 2, -D / 2);
+  bx3(M, vcWall, wallC, T, H, D, -W / 2, H / 2, 0);
+  bx3(M, vcWall, wallC, T, H, D, W / 2, H / 2, 0);
+  // front: low sill, header above, and real glass in between
+  for (const s of [-1, 1]) {
+    bx3(M, vcWall, wallC, W / 2 - 1.6, SILL, T, s * (W / 4 + .8), SILL / 2, D / 2);
+    bx3(M, vcWall, wallC, W / 2 - 1.6, H - WTOP, T, s * (W / 4 + .8), (H + WTOP) / 2, D / 2);
+    bx3(M, ptGlass, null, W / 2 - 1.7, WTOP - SILL, .1, s * (W / 4 + .8), (SILL + WTOP) / 2, D / 2);
+    bx3(M, vcMetal, 0x4a4e56, .12, WTOP - SILL, .16, s * (W / 4 + .8), (SILL + WTOP) / 2, D / 2);   // window bar
+    bx3(M, vcMetal, 0x4a4e56, W / 2 - 1.6, .12, .16, s * (W / 4 + .8), WTOP, D / 2);
+  }
+  bx3(M, vcWall, wallC, 3.2, H - 2.5, T, 0, H - (H - 2.5) / 2, D / 2);   // lintel over the door
+  // awning over the entrance
+  bx3(M, vcFlat, col, 6.4, .22, 2.2, 0, 3.3, D / 2 + 1.1, 0, 0, .2);
+  for (const s of [-1, 1]) cyl(M, vcMetal, 0xb8bec8, .07, .07, 3, s * 3, 1.5, D / 2 + 2, 6);
+  // sign, high up on the wall above the awning
+  { const tex = canvasTex(768, 128, (c, W2, Hh) => { c.fillStyle = '#' + col.toString(16).padStart(6, '0'); c.fillRect(0, 0, W2, Hh); c.fillStyle = '#fff6ea'; c.font = 'bold 66px Arial Black, Arial, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(name.toUpperCase(), W2 / 2, Hh / 2 + 3); });
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(10, 1.7), new THREE.MeshStandardMaterial({ map: tex, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: .5 }));
+    m.position.set(cx + Math.sin(rot) * (D / 2 + .22), Y + H - .95, cz + Math.cos(rot) * (D / 2 + .22)); m.rotation.y = rot; m.userData.dyn = true; scene.add(m); }
+  // counter with a till, kitchen hatch behind it
+  bx3(M, vcWall, 0x8a5a32, 7, 1.1, .8, -W / 2 + 4.6, .55, -D / 2 + 1.2);
+  bx3(M, vcFlat, 0x2a2e36, 7.2, .1, 1, -W / 2 + 4.6, 1.15, -D / 2 + 1.2);
+  bx3(M, vcFlat, 0xd8dce4, .6, .4, .5, -W / 2 + 2.2, 1.4, -D / 2 + 1.2);
+  bx3(M, vcFlat, 0x3a3e46, 5, 1.4, .18, -W / 2 + 4.6, 2.6, -D / 2 + .16);
+  // menu board on the back wall
+  { const tex = canvasTex(512, 384, (c, W2, Hh) => {
+      c.fillStyle = '#20252c'; c.fillRect(0, 0, W2, Hh); c.strokeStyle = '#ffd24a'; c.lineWidth = 8; c.strokeRect(10, 10, W2 - 20, Hh - 20);
+      c.fillStyle = '#ffd24a'; c.font = 'bold 44px Arial Black, Arial'; c.textAlign = 'center'; c.fillText('SPEISEKARTE', W2 / 2, 68);
+      c.font = 'bold 30px Arial'; c.textAlign = 'left'; c.fillStyle = '#fff6ea';
+      dishes.forEach((d, i) => { c.fillText(d.n, 44, 130 + i * 52); c.textAlign = 'right'; c.fillStyle = '#9ae6a0'; c.fillText(d.c + ' M', W2 - 44, 130 + i * 52); c.textAlign = 'left'; c.fillStyle = '#fff6ea'; });
+    });
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(4.4, 3.3), new THREE.MeshStandardMaterial({ map: tex, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: .3 }));
+    const lx = 4.4, lz = -D / 2 + .22; m.position.set(cx + lx * Math.cos(rot) + lz * Math.sin(rot), Y + 2.4, cz - lx * Math.sin(rot) + lz * Math.cos(rot)); m.rotation.y = rot; m.userData.dyn = true; scene.add(m); }
+  // tables and chairs
+  for (const tx of [-5, -1.4, 2.2, 5.8]) for (const tz of [1.2, 4.2]) {
+    cyl(M, vcMetal, 0x8a8e96, .09, .14, .72, tx, .36, tz, 8);
+    const tp = new THREE.CylinderGeometry(.75, .75, .1, 20); tp.translate(tx, .77, tz); put(vcWall, tp, 0xe8dcc4, M);
+    for (const a of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) {
+      const sxp = tx + Math.cos(a) * 1.15, szp = tz + Math.sin(a) * 1.15;
+      bx3(M, vcFlat, 0x9a3a32, .5, .08, .5, sxp, .45, szp, -a);
+      bx3(M, vcFlat, 0x9a3a32, .08, .55, .5, sxp + Math.cos(a) * .22, .72, szp + Math.sin(a) * .22, -a);
+      for (const q of [[-.2, -.2], [.2, -.2], [-.2, .2], [.2, .2]]) cyl(M, vcMetal, 0x5a5e66, .025, .025, .45, sxp + q[0], .22, szp + q[1], 5);
+    }
+    // a little vase on every table
+    cyl(M, vcFlat, 0x4fa3ff, .07, .1, .22, tx, .93, tz, 8);
+    const fl = new THREE.SphereGeometry(.1, 8, 6); fl.translate(tx, 1.1, tz); put(vcFlat, fl, 0xff6a9a, M);
+  }
+  // hanging lamps
+  for (const lx of [-5, -1.4, 2.2, 5.8]) for (const lz of [1.2, 4.2]) {
+    cyl(M, vcMetal, 0x3a3e46, .02, .02, 1.2, lx, H - .6, lz, 5);
+    const sh = new THREE.ConeGeometry(.42, .4, 12, 1, true); sh.translate(lx, H - 1.4, lz); put(vcFlat, sh, 0xffd24a, M);
+    const bulb = new THREE.Mesh(new THREE.SphereGeometry(.12, 8, 6), new THREE.MeshBasicMaterial({ color: 0xfff2c8, toneMapped: false }));
+    bulb.position.set(cx + lx * Math.cos(rot) + lz * Math.sin(rot), Y + H - 1.55, cz - lx * Math.sin(rot) + lz * Math.cos(rot)); bulb.userData.dyn = true; scene.add(bulb);
+  }
+  // plants in the corners
+  for (const s of [-1, 1]) { cyl(M, vcFlat, 0xa8552a, .3, .36, .5, s * (W / 2 - 1.2), .25, D / 2 - 1.5, 10); const b = new THREE.IcosahedronGeometry(.75, 0); b.translate(s * (W / 2 - 1.2), 1.1, D / 2 - 1.5); put(vcFlat, b, 0x2f6b2a, M); }
+  // walls as colliders (with the doorway left open)
+  const cosr = Math.cos(rot), sinr = Math.sin(rot);
+  const wall = (lx, lz, lw, ld) => {
+    const wx = cx + lx * cosr + lz * sinr, wz = cz - lx * sinr + lz * cosr;
+    const ew = Math.abs(lw * cosr) + Math.abs(ld * sinr), ed = Math.abs(lw * sinr) + Math.abs(ld * cosr);
+    addFarCollider(wx - ew / 2, wz - ed / 2, wx + ew / 2, wz + ed / 2, Y + H);
+  };
+  wall(0, -D / 2, W, T + .1); wall(-W / 2, 0, T + .1, D); wall(W / 2, 0, T + .1, D);
+  for (const s of [-1, 1]) wall(s * (W / 4 + .8), D / 2, W / 2 - 1.6, T + .1);
+  minimapRects.push({ x: cx, z: cz, w: W, d: D, type: 'bld' });
+  MAP_LABELS.push([name, cx, cz]);
+  // a waiter behind the counter
+  try { const h = makeHuman(randomLook('normal')); const hx = -W / 2 + 4.6, hz = -D / 2 + 2.4; h.position.set(cx + hx * cosr + hz * sinr, Y, cz - hx * sinr + hz * cosr); h.rotation.y = rot; h.userData.dyn = true; scene.add(h); } catch (e) { }
+  // ordering: one spot at the counter
+  const ox = -W / 2 + 4.6, oz = -D / 2 + 2.6;
+  const wxp = cx + ox * cosr + oz * sinr, wzp = cz - ox * sinr + oz * cosr;
+  dishes.forEach((d, i) => {
+    MAPI.push({
+      name: name + ': ' + d.n + ' (' + d.c + ' Münzen)', x: wxp + (i - (dishes.length - 1) / 2) * 1.5 * cosr, z: wzp - (i - (dishes.length - 1) / 2) * 1.5 * sinr, r: 1.6, y: Y,
+      act: () => buyTreat(d.c, () => { if (d.heal) player.hp = Math.min(P.maxHp, player.hp + d.heal); if (d.buff) giveBuff(d.buff, d.t || 40); if (d.xp) addXp(d.xp); }, d.m),
+    });
+  });
+  // a sunny terrace with parasols in front
+  for (const s of [-1, 1]) {
+    const tx2 = s * 5.4, tz2 = D / 2 + 3.4;
+    cyl(M, vcMetal, 0x8a8e96, .08, .1, 2.4, tx2, 1.2, tz2, 8);
+    for (let k = 0; k < 8; k++) { const seg = new THREE.ConeGeometry(1.5, .55, 8, 1, true, k / 8 * Math.PI * 2, Math.PI * 2 / 8); seg.translate(tx2, 2.4, tz2); put(vcFlat, seg, k % 2 ? col : 0xf4f4f0, M); }
+    const tp = new THREE.CylinderGeometry(.7, .7, .08, 16); tp.translate(tx2, .78, tz2); put(vcWall, tp, 0xe8dcc4, M);
+    for (const a of [0, Math.PI]) { const cx2 = tx2 + Math.cos(a) * 1.2, cz2 = tz2 + Math.sin(a) * 1.2; bx3(M, vcFlat, 0x9a3a32, .5, .08, .5, cx2, .45, cz2); bx3(M, vcFlat, 0x9a3a32, .08, .55, .5, cx2 + Math.cos(a) * .22, .72, cz2, -a); }
+  }
+  flushGB();
+}
+
+ptRestaurant(200, 82, Math.PI, 'Zur goldenen Möhre', 0xd8a33a, [
+  { n: 'Möhrensuppe', c: 6, heal: 45, m: 'Warm und lecker! +45 Leben' },
+  { n: 'Ofenpizza', c: 9, heal: 70, m: 'Knusprig! +70 Leben' },
+  { n: 'Kraftsalat', c: 12, buff: 'power', t: 50, m: 'Superkraft für 50 Sekunden!' },
+  { n: 'Eisbecher', c: 8, buff: 'speed', t: 45, m: 'Turbo-Beine für 45 Sekunden!' },
+]);
+ptRestaurant(348, 60, 0, 'Pikumios Pfanne', 0xd83a3a, [
+  { n: 'Spaghetti', c: 8, heal: 60, m: 'Mamma mia! +60 Leben' },
+  { n: 'Riesenburger', c: 11, heal: 100, m: 'Satt und stark! Volle Leben' },
+  { n: 'Panzer-Pudding', c: 12, buff: 'armor', t: 50, m: 'Panzer-Bauch für 50 Sekunden!' },
+  { n: 'Karottenkuchen', c: 10, xp: 60, m: 'Lecker! +60 Erfahrung' },
+]);
+
+// ---------- Nordsee: the big lake in the new north ----------
+{
+  const L = NLAKE, y = -.6;
+  const g = new THREE.CircleGeometry(1, 64); g.rotateX(-Math.PI / 2); g.scale(L.rx * 1.12, 1, L.rz * 1.12); g.translate(L.x, y, L.z);
+  const lake = new THREE.Mesh(g, lakeMat); lake.userData.dyn = true; scene.add(lake);
+  minimapRects.push({ x: L.x, z: L.z, w: L.rx * 2.2, d: L.rz * 2.2, type: 'water' });
+  MAP_LABELS.push(['Nordsee', L.x, L.z], ['Seehütte', L.x - 70, L.z + 46]);
+  // jetty and boathouse on the south shore
+  const jx = L.x - 62, jz = L.z + 50, jy = Math.max(.2, walkHeight(jx, jz));
+  for (let k = 0; k < 9; k++) { const pz = jz - k * 1.7; for (const s of [-1, 1]) cyl(null, vcFlat, 0x6a4a2e, .11, .11, 2.6, jx + s * .95, jy - .5, pz, 6); }
+  bx3(null, vcWall, 0xb08a52, 2.4, .14, 15, jx, jy + .72, jz - 6.8);
+  for (const s of [-1, 1]) for (let k = 0; k < 8; k++) cyl(null, vcMetal, 0xc8ccd4, .04, .04, .9, jx + s * 1.1, jy + 1.2, jz - .6 - k * 1.9, 5);
+  addFarCollider(jx - 1.3, jz - 14.5, jx + 1.3, jz + 1, jy + .8);
+  // boathouse
+  { const hx = jx - 8, hz = jz + 4, hy = walkHeight(hx, hz), M = mkM(hx, hy, hz, 0);
+    bx3(M, vcWall, 0xe8dcc0, 7.4, 3, 6, 0, 1.5, 0);
+    const rf = new THREE.CylinderGeometry(3.6, 3.6, 8.2, 3, 1, false); rf.rotateY(Math.PI / 6); rf.rotateZ(-Math.PI / 2); rf.translate(0, 1.8, 0); rf.scale(1, .55, 1); rf.translate(0, 3, 0); put(vcRoof, rf, 0x8a3a2a, M);
+    bx3(M, vcFlat, 0x5a3a24, 1.2, 2.1, .12, 0, 1.05, 3.02);
+    addFarCollider(hx - 3.8, hz - 3.1, hx + 3.8, hz + 3.1, hy + 4.6);
+    MAPI.push({ name: 'Seehütte: ausruhen', x: hx, z: hz + 4.4, r: 2.4, y: hy, act: () => { player.hp = P.maxHp; flyText('Schön am Nordsee! Volle Leben'); sticker('o', 'Nordsee'); } });
+  }
+  for (let k = 0; k < 16; k++) { const a = Math.random() * Math.PI * 2, r = 1.25 + Math.random() * .35; const tx = L.x + Math.cos(a) * L.rx * r, tz = L.z + Math.sin(a) * L.rz * r; if (Math.abs(tx - jx) < 20 && Math.abs(tz - jz) < 20) continue; prTree(tx, tz, prRand(.8, 1.3)); }
+  signpost(jx + 10, jz + 2, [['Nordsee', Math.PI], ['Pikumio-Stadt', 0]]);
+  flushGB();
+}
+
+function ptStart() { PT.ride = null; }
+function ptClear() { PT.ride = null; }
 
 pfBuildWorld();
 // ================= Sky package: sun rays, glitter path on the sea, big moon, turquoise shallows =================
@@ -39481,7 +39849,7 @@ function updatePlay(dt) {
   collideCircle(player.pos, PR, player.pos.y, true);
   player.pos.x = clamp(player.pos.x, XMIN + PR, XMAX - PR); player.pos.z = clamp(player.pos.z, ZMIN + PR, ZMAX - PR);
   if (diving) player.pos.z = Math.max(player.pos.z, QUAY_Z + 2.5);
-  rideTick(dt); funTick(dt); cableTick(dt); sitTick(dt);
+  rideTick(dt); funTick(dt); cableTick(dt); sitTick(dt); if (typeof ptTick === 'function') ptTick(dt);
   // cars
   for (const car of cars) {
     if (player.pos.y < 1.6 && inCar(car, player.pos.x, player.pos.z, PR) && car.v > 2) {
@@ -39668,9 +40036,11 @@ function addMenuFigures() {
   const hero = makePikumio('hero'); hero.position.set(0, 0, -4); hero.userData.ph = 0; scene.add(hero); menuFigures.push(hero);
   ['normal', 'fast', 'tank', 'normal', 'fast'].forEach((t, i) => { const c = makePikumio(t); const a = i / 5 * Math.PI * 2 + .4; c.position.set(Math.sin(a) * 5, 0, -4 + Math.cos(a) * 5); c.scale.setScalar(TYPES[t].scale); c.rotation.y = a + Math.PI; c.userData.ph = i + 1; scene.add(c); menuFigures.push(c); });
 }
+let ultraLow = 0;
 function adaptResolution(dt) {
   if (state !== 'play' || (SET.res && SET.res !== 'auto') || (SET.ups && SET.ups !== 'aus')) return; frameAcc += dt; frameN++;
   if (frameAcc < 2) return; const fps = frameN / frameAcc; frameAcc = 0; frameN = 0;
+  if (QUALITY === 'ultra') { ultraLow = fps < 18 ? ultraLow + 1 : 0; if (ultraLow >= 3) { ultraLow = 0; QUALITY = 'high'; try { localStorage.setItem('pikumio-q', 'high'); } catch (e) { } applyQuality(); banner('Grafik angepasst', 'Maximal war zu langsam - jetzt auf Hoch', 2600); } return; }
   const target = QUALITY === 'high' ? Math.min(MAX_PR, 1.5) : Math.min(MAX_PR, 1);
   if (QUALITY === 'high' && fps < 24 && pixelRatio <= .75) { QUALITY = 'low'; applyQuality(); banner('Grafik angepasst', 'Für flüssiges Spielen auf Schnell gestellt', 2200); return; }
   if (fps < 42 && pixelRatio > .6) { pixelRatio = Math.max(.6, pixelRatio - .15); resize(); }
