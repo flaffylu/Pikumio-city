@@ -30119,7 +30119,8 @@ function carGeometry(kind) {
   if (carGeoCache[kind]) return carGeoCache[kind];
   const K = CAR_KINDS[kind], W = K.W - .16, hw = K.W / 2, B = K.body, ar = K.wr + .15;
   const paint = [], glass = [], trim = [], chrome = [], lights = [], tails = [], wells = [];
-  paint.push(extrudeShape(bodyShape(K), W, .08));
+  const bv = K.bevel || .08;
+  paint.push(extrudeShape(bodyShape(K), K.W - 2 * bv, bv, bv > .12 ? 4 : 3));
   const front = B[0][0], rear = B[B.length - 1][0];
   // greenhouse: glass core, with roof and pillars painted
   const C = K.cabin, belt = C[0][1];
@@ -38803,11 +38804,19 @@ function prHouse(x, z, w, d, h, style) {
   h = Math.max(9, Math.round(h / 3) * 3);
   const mat = winMats[STYLE_IDX[style][Math.floor(Math.random() * STYLE_IDX[style].length)]];
   const g = new THREE.BoxGeometry(w, h, d); setBoxUV(g, w, h, d); g.translate(x, PRX.Y + h / 2, z); put(mat, g);
-  const pl = new THREE.BoxGeometry(w + .24, 1.1, d + .24); setBoxUV(pl, w + .24, 1.1, d + .24, 8, 1.1); pl.translate(x, PRX.Y + .55, z); put(stoneMat, pl);
-  const rf = new THREE.BoxGeometry(w + .7, .45, d + .7); rf.translate(x, PRX.Y + h + .22, z); put(roofMat, rf);
+  const pl = new RoundedBoxGeometry(w + .3, 1.2, d + .3, 2, .18); pl.translate(x, PRX.Y + .6, z); put(stoneMat, pl);
+  const rf = new RoundedBoxGeometry(w + .7, .5, d + .7, 2, .16); rf.translate(x, PRX.Y + h + .25, z); put(roofMat, rf);
   for (const [pw, pd, ox, oz] of [[w + .7, .3, 0, -(d + .4) / 2], [w + .7, .3, 0, (d + .4) / 2], [.3, d + .7, -(w + .4) / 2, 0], [.3, d + .7, (w + .4) / 2, 0]]) {
-    const p = new THREE.BoxGeometry(pw, .8, pd); p.translate(x + ox, PRX.Y + h + .85, z + oz); put(stoneMat, p);
+    const p = new RoundedBoxGeometry(pw, .8, pd, 2, .12); p.translate(x + ox, PRX.Y + h + .85, z + oz); put(stoneMat, p);
   }
+  // runde Ecksaeulen nehmen dem Haus die harten Kanten
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+    const c = new THREE.CylinderGeometry(.42, .42, h + 1.1, 12); c.translate(x + sx * (w / 2 - .06), PRX.Y + (h + 1.1) / 2, z + sz * (d / 2 - .06)); put(stoneMat, c);
+  }
+  { const cor = new THREE.CylinderGeometry(.3, .3, w + 1.1, 10); cor.rotateZ(Math.PI / 2); cor.translate(x, PRX.Y + h + .45, z - (d + .5) / 2); put(stoneMat, cor);
+    const cor2 = cor.clone(); cor2.translate(0, 0, d + .5); put(stoneMat, cor2);
+    const cor3 = new THREE.CylinderGeometry(.3, .3, d + 1.1, 10); cor3.rotateX(Math.PI / 2); cor3.translate(x - (w + .5) / 2, PRX.Y + h + .45, z); put(stoneMat, cor3);
+    const cor4 = cor3.clone(); cor4.translate(w + .5, 0, 0); put(stoneMat, cor4); }
   if (h > 33) { // roof mast with a warning light for the tall ones
     cyl(null, vcMetal, 0x9aa0a8, .07, .09, 7, x + w * .22, PRX.Y + h + 4.7, z - d * .22, 6);
     const l = new THREE.Mesh(new THREE.SphereGeometry(.24, 8, 6), blinkMat); l.position.set(x + w * .22, PRX.Y + h + 8.3, z - d * .22); l.userData.dyn = true; scene.add(l);
@@ -38818,11 +38827,11 @@ function prHouse(x, z, w, d, h, style) {
 // cheap tree: trunk + three leaf blobs, all merged
 function prTree(x, z, s = 1) {
   const y = walkHeight(x, z);
-  const t = new THREE.CylinderGeometry(.13 * s, .22 * s, 3 * s, 6); t.translate(x, y + 1.5 * s, z); put(vcFlat, t, 0x6a4a2e);
+  const t = new THREE.CylinderGeometry(.12 * s, .24 * s, 3 * s, 10); t.translate(x, y + 1.5 * s, z); put(vcFlat, t, 0x6a4a2e);
   const cols = [0x2f6b2a, 0x3d8233, 0x275a24];
   for (let k = 0; k < 3; k++) {
-    const c = new THREE.IcosahedronGeometry((1.45 - k * .22) * s, 0);
-    c.translate(x + prRand(-.45, .45) * s, y + (3.1 + k * .78) * s, z + prRand(-.45, .45) * s);
+    const c = new THREE.IcosahedronGeometry((1.45 - k * .22) * s, 1);
+    c.translate(x + prRand(-.4, .4) * s, y + (3.1 + k * .72) * s, z + prRand(-.4, .4) * s);
     put(vcFlat, c, cols[k]);
   }
   addFarCollider(x - .3, z - .3, x + .3, z + .3, y + 3 * s);
@@ -38991,10 +39000,12 @@ function prEdge(axis, c, a, b, skips) {
 // ---------- parked cars in the new city ----------
 {
   const spots = [
-    ['sport', 3, 136, -40, 0], ['pickup', 5, 136, 24, Math.PI], ['limo', 1, 168, -56, Math.PI / 2],
-    ['suv', 9, 200, 8, -Math.PI / 2], ['oldtimer', 2, 232, -24, 0], ['monster', 7, 264, 56, Math.PI],
-    ['wagon', 4, 152, 70, Math.PI / 2], ['coupe', 11, 216, -70, -Math.PI / 2], ['van', 6, 280, -8, 0],
-    ['cabrio', 8, 296, 72, Math.PI / 2], ['sport', 10, 344, -58, 0], ['pickup', 0, 392, -34, Math.PI / 2],
+    ['sport', 3, 188.6, -44, Math.PI / 2], ['pickup', 5, 195.4, -8, -Math.PI / 2],
+    ['limo', 1, 220.6, 20, Math.PI / 2], ['suv', 9, 227.4, -44, -Math.PI / 2],
+    ['oldtimer', 2, 284.6, 44, Math.PI / 2], ['monster', 7, 291.4, -20, -Math.PI / 2],
+    ['wagon', 4, 176, -60.6, 0], ['coupe', 11, 240, -67.4, Math.PI],
+    ['van', 6, 170, 3.4, 0], ['cabrio', 8, 250, -3.4, Math.PI],
+    ['sport', 10, 206, 60.6, 0], ['pickup', 0, 272, 67.4, Math.PI],
   ];
   for (const [k, ci, x, z, h] of spots) { try { makeFreeCar(k, ci, x, z, h, false); } catch (e) { } }
 }
@@ -39087,7 +39098,7 @@ function prTick(dt) { }
 Object.assign(CAR_KINDS, {
   // box lorry with a closed cargo body
   lkw: {
-    L: 7.8, W: 2.46, yb: .72, wheelX: [-2.2, 2.5], wr: .55, bX: 1.5,
+    L: 7.8, W: 2.46, yb: .72, wheelX: [-2.2, 2.5], wr: .55, bX: 1.5, bevel: .18,
     body: [[3.88, .86], [3.94, 1.2], [3.92, 1.56], [3.4, 1.6], [.7, 1.62], [.56, 1.54], [-3.8, 1.54], [-3.9, .82]],
     cabin: [[3.4, 1.6], [3.3, 2.92], [1.1, 2.94], [.7, 1.62]],
     boxBody: { from: .5, to: -3.84, y: 1.54, h: 2.12 },
@@ -39095,7 +39106,7 @@ Object.assign(CAR_KINDS, {
   },
   // tipper with high side walls
   kipper: {
-    L: 8.2, W: 2.5, yb: .74, wheelX: [-2.9, -1.75, 2.6], wr: .56, bX: 1.6,
+    L: 8.2, W: 2.5, yb: .74, wheelX: [-2.9, -1.75, 2.6], wr: .56, bX: 1.6, bevel: .18,
     body: [[4.08, .88], [4.14, 1.22], [4.12, 1.58], [3.6, 1.62], [.8, 1.64], [.66, 1.56], [-4.0, 1.56], [-4.1, .84]],
     cabin: [[3.6, 1.62], [3.5, 2.94], [1.3, 2.96], [.8, 1.64]],
     bed: { from: .6, to: -3.95, y: 1.56, h: 1.1 },
@@ -39103,7 +39114,7 @@ Object.assign(CAR_KINDS, {
   },
   // tractor unit for the semi-trailer
   sattel: {
-    L: 6.8, W: 2.5, yb: .76, wheelX: [-2.5, -1.4, 2.3], wr: .56, bX: 1.2,
+    L: 6.8, W: 2.5, yb: .76, wheelX: [-2.5, -1.4, 2.3], wr: .56, bX: 1.2, bevel: .18,
     body: [[3.38, .9], [3.44, 1.24], [3.42, 1.6], [2.9, 1.64], [.2, 1.66], [.06, 1.58], [-3.3, 1.58], [-3.4, .86]],
     cabin: [[2.9, 1.64], [2.8, 3.06], [-.5, 3.08], [-.9, 1.66]],
     stack: { x: -1.0, y: 1.66, h: 2.2 },
@@ -39139,8 +39150,7 @@ function psBuildTrailer(car) {
   mk(new THREE.BoxGeometry(T.len, .22, W - .5).translate(-T.len / 2, T.deck - .1, 0), psFrameMat);
   // box: walls, roof, front and rear doors
   const bh = T.h, by = T.deck;
-  for (const s of [-1, 1]) mk(new THREE.BoxGeometry(T.len, bh, .09).translate(-T.len / 2, by + bh / 2, s * (hw - .05)), psBodyMat);
-  mk(new THREE.BoxGeometry(T.len, .12, W - .08).translate(-T.len / 2, by + bh - .06, 0), psBodyMat);
+  mk(new RoundedBoxGeometry(T.len, bh, W, 3, .16).translate(-T.len / 2, by + bh / 2, 0), psBodyMat);
   mk(new THREE.BoxGeometry(.1, bh, W - .1).translate(-.05, by + bh / 2, 0), psBodyMat);
   mk(new THREE.BoxGeometry(.1, bh - .12, W - .14).translate(-T.len + .05, by + bh / 2, 0), psFrameMat);
   for (const s of [-1, 1]) for (let r = 0; r < 7; r++) mk(new THREE.BoxGeometry(.06, bh - .18, .06).translate(-.8 - r * (T.len - 1.6) / 6, by + bh / 2, s * (hw - .005)), psFrameMat, false);
@@ -39187,10 +39197,10 @@ function psTick(dt) {
 }
 // A small haulage yard on the harbour quay, so the lorries can be found and
 // driven without buying one first.
-for (const [k, ci, x, z, h] of [['lkw', 5, 300, 86, Math.PI / 2], ['kipper', 1, 316, 86, Math.PI / 2], ['sattel', 3, 338, 86, Math.PI / 2], ['lkw', 9, 356, 86, Math.PI / 2]]) {
+for (const [k, ci, x, z, h] of [['lkw', 5, 300, 88, Math.PI / 2], ['kipper', 1, 318, 88, Math.PI / 2], ['sattel', 3, 342, 88, Math.PI / 2], ['lkw', 9, 362, 88, Math.PI / 2]]) {
   try { makeFreeCar(k, ci, x, z, h, false); } catch (e) { }
 }
-MAP_LABELS.push(['Spedition', 326, 86]);
+MAP_LABELS.push(['Spedition', 330, 88]);
 
 function psStart() { }
 function psClear() { for (const e of PS.list) scene.remove(e.t.g); PS.list.length = 0; }
@@ -39207,7 +39217,8 @@ function ptTower(x, z, H, w, name, col) {
   // plinth and shaft are built as single meshes so the glass keeps its own look
   const mat = winMats[STYLE_IDX.glass[Math.floor(Math.random() * STYLE_IDX.glass.length)]];
   const g = new THREE.BoxGeometry(w, H, w); setBoxUV(g, w, H, w); g.translate(x, Y + H / 2, z); put(mat, g);
-  const pl = new THREE.BoxGeometry(w + .6, 5, w + .6); setBoxUV(pl, w + .6, 5, w + .6, 8, 5); pl.translate(x, Y + 2.5, z); put(stoneMat, pl);
+  const pl = new RoundedBoxGeometry(w + .7, 5, w + .7, 3, .3); pl.translate(x, Y + 2.5, z); put(stoneMat, pl);
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) { const c = new THREE.CylinderGeometry(.5, .5, H, 12); c.translate(x + sx * (w / 2 - .08), Y + H / 2, z + sz * (w / 2 - .08)); put(stoneMat, c); }
   // entrance canopy on the west side
   bx3(null, vcFlat, 0x2a2e36, 3.4, .3, 7, x - half - 1.5, Y + 4.2, z);
   for (const s of [-1, 1]) cyl(null, vcMetal, 0xb8bec8, .1, .1, 4.2, x - half - 2.9, Y + 2.1, z + s * 3.1, 8);
@@ -39437,8 +39448,8 @@ for (const x of EAST_X) for (const z of [-64, -32, 0, 32, 64]) {
 // ---------- small street furniture, merged ----------
 function puBench(x, z, rot) {
   const y = walkHeight(x, z), M = mkM(x, y, z, rot);
-  bx3(M, vcWall, 0x9a6a3a, 2, .1, .55, 0, .48, 0);
-  bx3(M, vcWall, 0x9a6a3a, 2, .5, .08, 0, .78, -.26);
+  put(vcWall, new RoundedBoxGeometry(2, .12, .55, 2, .055).translate(0, .48, 0), 0x9a6a3a, M);
+  put(vcWall, new RoundedBoxGeometry(2, .5, .1, 2, .045).translate(0, .78, -.26), 0x9a6a3a, M);
   for (const s of [-.85, .85]) bx3(M, vcMetal, 0x3a3e46, .08, .48, .5, s, .24, 0);
   addFarCollider(x - 1.1, z - .4, x + 1.1, z + .4, y + .6);
 }
@@ -39464,8 +39475,8 @@ flushGB();
 // ---------- kiosks with something to buy ----------
 function puKiosk(x, z, rot, name, col, item) {
   const y = walkHeight(x, z), M = mkM(x, y, z, rot);
-  bx3(M, vcWall, 0xf0ece0, 3.4, 2.5, 2.4, 0, 1.25, 0);
-  bx3(M, vcFlat, col, 4, .3, 3, 0, 2.65, 0);
+  put(vcWall, new RoundedBoxGeometry(3.4, 2.5, 2.4, 3, .22).translate(0, 1.25, 0), 0xf0ece0, M);
+  put(vcFlat, new RoundedBoxGeometry(4, .34, 3, 2, .14).translate(0, 2.67, 0), col, M);
   bx3(M, vcFlat, 0x3a3e46, 3.2, .12, .5, 0, 1.5, 1.4);          // serving shelf
   bx3(M, ptGlass, null, 3, .9, .1, 0, 1.95, 1.21);
   for (const s of [-1, 1]) cyl(M, vcMetal, 0xb8bec8, .05, .05, 1.6, s * 1.5, 2.1, 2.2, 6);
@@ -39477,10 +39488,10 @@ function puKiosk(x, z, rot, name, col, item) {
   MAPI.push({ name: name + ': ' + item.n + ' (' + item.c + ' Münzen)', x: x + Math.sin(rot) * 2.4, z: z + Math.cos(rot) * 2.4, r: 2, y, act: () => buyTreat(item.c, item.f, item.m) });
   MAP_LABELS.push([name, x, z]);
 }
-puKiosk(170, -22, Math.PI, 'IMBISS', 0xff6a3d, { n: 'Currywurst', c: 7, f: () => { player.hp = Math.min(P.maxHp, player.hp + 55); }, m: 'Lecker! +55 Leben' });
-puKiosk(202, 42, 0, 'EIS', 0x4fd8ff, { n: 'Eis am Stiel', c: 5, f: () => { giveBuff('speed', 35); }, m: 'Turbo-Beine für 35 Sekunden!' });
-puKiosk(250, -42, Math.PI, 'KAFFEE', 0x8a5a32, { n: 'Kakao', c: 4, f: () => { player.hp = Math.min(P.maxHp, player.hp + 30); }, m: 'Warm! +30 Leben' });
-puKiosk(234, 22, 0, 'BLUMEN', 0xff4fa3, { n: 'Blumenstrauß', c: 6, f: () => { addXp(45); }, m: 'Wie schön! +45 Erfahrung' });
+puKiosk(199, 7.5, 0, 'IMBISS', 0xff6a3d, { n: 'Currywurst', c: 7, f: () => { player.hp = Math.min(P.maxHp, player.hp + 55); }, m: 'Lecker! +55 Leben' });
+puKiosk(217, 24.5, Math.PI, 'EIS', 0x4fd8ff, { n: 'Eis am Stiel', c: 5, f: () => { giveBuff('speed', 35); }, m: 'Turbo-Beine für 35 Sekunden!' });
+puKiosk(263, -39, 0, 'KAFFEE', 0x8a5a32, { n: 'Kakao', c: 4, f: () => { player.hp = Math.min(P.maxHp, player.hp + 30); }, m: 'Warm! +30 Leben' });
+puKiosk(281, -57, Math.PI, 'BLUMEN', 0xff4fa3, { n: 'Blumenstrauß', c: 6, f: () => { addXp(45); }, m: 'Wie schön! +45 Erfahrung' });
 flushGB();
 
 // ---------- bus stops along the main avenues ----------
@@ -39508,7 +39519,7 @@ flushGB();
     const y = walkHeight(sx, sz), M = mkM(sx, y, sz, 0);
     for (const ox of [-1.5, 1.5]) for (const oz of [-1.1, 1.1]) cyl(M, vcMetal, 0xd8dce4, .05, .05, 2.2, ox, 1.1, oz, 6);
     for (let k = 0; k < 6; k++) bx3(M, vcFlat, k % 2 ? col : 0xf4f4f0, 3.6, .12, .42, 0, 2.3 + Math.abs(k - 2.5) * .06, -1.25 + k * .5);
-    bx3(M, vcWall, 0xb08a52, 3.4, .12, 1.9, 0, .92, 0);
+    put(vcWall, new RoundedBoxGeometry(3.4, .14, 1.9, 2, .06).translate(0, .92, 0), 0xb08a52, M);
     for (const ox of [-1.4, 1.4]) bx3(M, vcMetal, 0x5a5e66, .08, .9, .08, ox, .45, 0);
     for (let k = 0; k < 7; k++) { const g = new THREE.SphereGeometry(.14, 8, 6); g.translate(-1.2 + k * .4, 1.08, prRand(-.5, .5)); put(vcFlat, g, pk([0xd83a3a, 0xffa53a, 0x6ab83a, 0xffd24a])); }
     addFarCollider(sx - 1.9, sz - 1.3, sx + 1.9, sz + 1.3, y + 1);
@@ -39558,15 +39569,15 @@ function puTick(dt) { }
 Object.assign(CAR_KINDS, {
   // city bus: one long glazed body, no separate cab
   bus: {
-    L: 11, W: 2.55, yb: .52, wheelX: [-3.5, 3.3], wr: .52, bX: 0, noCabin: true,
-    body: [[5.5, .64], [5.56, 1.0], [5.54, 3.1], [5.1, 3.24], [-5.1, 3.24], [-5.54, 3.1], [-5.5, .62]],
+    L: 11, W: 2.55, yb: .8, wheelX: [-3.5, 3.3], wr: .6, bX: 0, noCabin: true, bevel: .2,
+    body: [[5.5, .94], [5.56, 1.26], [5.54, 3.12], [5.1, 3.26], [-5.1, 3.26], [-5.54, 3.12], [-5.5, .92]],
     cabin: [[5.1, 3.24], [4.9, 3.24], [-4.9, 3.24], [-5.1, 3.24]],
     band: { from: 4.7, to: -4.9, y: 1.75, h: 1.15 },
     doors: [3.1, -1.4],
   },
   // fire engine: lorry body, equipment lockers, turntable ladder, blue lights
   feuerwehr: {
-    L: 8.4, W: 2.5, yb: .74, wheelX: [-2.6, 2.7], wr: .56, bX: 1.5,
+    L: 8.4, W: 2.5, yb: .74, wheelX: [-2.6, 2.7], wr: .56, bX: 1.5, bevel: .18,
     body: [[4.18, .88], [4.24, 1.22], [4.22, 1.6], [3.5, 1.64], [.7, 1.66], [.56, 1.56], [-4.1, 1.56], [-4.2, .84]],
     cabin: [[3.5, 1.64], [3.4, 2.92], [1.0, 2.94], [.7, 1.66]],
     boxBody: { from: .48, to: -4.12, y: 1.56, h: 1.3 },
@@ -39576,7 +39587,7 @@ Object.assign(CAR_KINDS, {
   },
   // tractor: small front wheels, huge rear wheels, cab at the back
   traktor: {
-    L: 4.6, W: 2.1, yb: .52, wheelX: [-1.2, 1.5], wr: .86, wrF: .44, bX: -.4,
+    L: 4.6, W: 2.1, yb: .52, wheelX: [-1.2, 1.5], wr: .86, wrF: .44, bX: -.4, bevel: .15,
     body: [[2.3, .56], [2.34, .9], [2.2, 1.1], [1.1, 1.2], [-.3, 1.26], [-.4, 1.0], [-2.1, 1.0], [-2.3, .56]],
     cabin: [[1.1, 1.2], [.55, 2.6], [-1.0, 2.62], [-1.5, 1.26]],
     stack: { x: 1.15, y: 1.2, h: 1.5 },
@@ -39600,15 +39611,15 @@ if (typeof VEH_PROFILES === 'object') {
 // ---------- where to find them without buying ----------
 const PV = { bus: null, fire: null };
 for (const [k, ci, x, z, h] of [
-  ['bus', 2, 146, -26, Math.PI / 2],        // am Busbahnhof in Neu-Pikumio
-  ['bus', 8, 266, 26, -Math.PI / 2],
+  ['bus', 2, 150, -2, 0],                   // auf der Hauptstrasse beim Busbahnhof
+  ['bus', 8, 250, 2, Math.PI],
   ['traktor', 6, -18, -120, 0],             // beim Bauernhof
   ['traktor', 3, 186, -268, Math.PI / 2],   // im Bergdorf Sonnental
 ]) { try { makeFreeCar(k, ci, x, z, h, false); } catch (e) { } }
 
 // the fire engine lives at the fire station and gets a blue light bar
 try {
-  const fe = makeFreeCar('feuerwehr', 4, -106, 38.6, Math.PI / 2, false);
+  const fe = makeFreeCar('feuerwehr', 4, -126, 42, -Math.PI / 2, false);
   if (fe) { if (typeof lightbar === 'function') lightbar(fe, [0x2060ff, 0x2060ff]); if (typeof sideText === 'function') sideText(fe, 'FEUERWEHR 112', '#f4f4f4', '#d81a1a', .9); PV.fire = fe; }
 } catch (e) { }
 
@@ -39862,7 +39873,7 @@ const PYX_CHESTS = [
 ];
 for (const [name, x, z] of PYX_CHESTS) {
   const y = walkHeight(x, z), M = mkM(x, y, z, Math.random() * 6);
-  bx3(M, vcWall, 0x8a5a2e, 1.2, .7, .8, 0, .35, 0);
+  put(vcWall, new RoundedBoxGeometry(1.2, .7, .8, 2, .09).translate(0, .35, 0), 0x8a5a2e, M);
   const lid = new THREE.CylinderGeometry(.42, .42, 1.2, 12, 1, false, 0, Math.PI);
   lid.rotateZ(Math.PI / 2); lid.rotateY(Math.PI / 2); lid.translate(0, .7, 0); put(vcWall, lid, 0x9a6a3a, M);
   for (const s of [-1, 1]) bx3(M, vcMetal, 0xd8b84a, 1.24, .1, .12, 0, .35, s * .3);
